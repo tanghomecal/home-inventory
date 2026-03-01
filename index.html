@@ -425,22 +425,36 @@ async function boot() {
 // to block the request. Solution: POST the JSON as a URL-encoded form
 // field ("data"), which is a "simple request" with no preflight.
 // ═══════════════════════════════════════════════════════════
+// JSONP completely bypasses CORS — works on all browsers including Android Chrome
+// Apps Script supports ?callback=fnName natively
+function jsonpRequest(url) {
+  return new Promise((resolve, reject) => {
+    const cbName = 'inv_cb_' + Date.now() + '_' + Math.floor(Math.random()*10000);
+    const script = document.createElement('script');
+    const timer = setTimeout(function() {
+      cleanup();
+      reject(new Error('Timed out — check URL and deployment'));
+    }, 15000);
+    function cleanup() {
+      clearTimeout(timer);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+    window[cbName] = function(data) { cleanup(); resolve(data); };
+    script.onerror = function() { cleanup(); reject(new Error('Failed to load — check URL')); };
+    const sep = url.indexOf('?') >= 0 ? '&' : '?';
+    script.src = url + sep + 'callback=' + cbName;
+    document.head.appendChild(script);
+  });
+}
+
 async function androidSafeGet(url) {
-  // Keep this as simple as possible — no extra headers, just follow redirects
-  // Apps Script does a redirect from /exec to /exec?... so redirect:follow is essential
-  return fetch(url, { redirect: 'follow' });
+  return jsonpRequest(url);
 }
 
 async function androidSafePost(url, payload) {
-  // Use URLSearchParams — browser automatically sets Content-Type correctly
-  // without triggering a CORS preflight on Android Chrome
-  const params = new URLSearchParams();
-  params.append('data', JSON.stringify(payload));
-  return fetch(url, {
-    method: 'POST',
-    redirect: 'follow',
-    body: params,
-  });
+  const sep = url.indexOf('?') >= 0 ? '&' : '?';
+  return jsonpRequest(url + sep + 'data=' + encodeURIComponent(JSON.stringify(payload)));
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -450,8 +464,7 @@ async function fetchItemsFromSheet(url, silent=false) {
   if (!silent) showLoadingBanner('Loading items from Google Sheets…');
   setSyncBadge('syncing', 'Loading…');
   try {
-    const res  = await androidSafeGet(`${url}?action=items`);
-    const json = await res.json();
+    const json = await androidSafeGet(`${url}?action=items`);
     if (json.error) throw new Error(json.error);
     localStorage.setItem(KEY_ITEMS, JSON.stringify(json.items));
     buildRoomsFromItems(json.items);
@@ -493,8 +506,7 @@ async function syncToSheet() {
     user:   localStorage.getItem(KEY_USER) || 'Helper',
   };
   try {
-    const res  = await androidSafePost(url, payload);
-    const json = await res.json();
+    const json = await androidSafePost(url, payload);
     if (json.error) throw new Error(json.error);
     localStorage.removeItem(KEY_PENDING);
     setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
@@ -528,8 +540,7 @@ async function attemptPendingSync(url) {
   if (!pendingRaw) return;
   try {
     const pending = JSON.parse(pendingRaw);
-    const res  = await androidSafePost(url, pending.payload);
-    const json = await res.json();
+    const json = await androidSafePost(url, pending.payload);
     if (!json.error) {
       localStorage.removeItem(KEY_PENDING);
       setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
@@ -623,8 +634,7 @@ async function connectToSheet() {
   btn.textContent = 'Connecting…';
   btn.classList.add('loading');
   try {
-    const res  = await androidSafeGet(`${url}?action=items`);
-    const json = await res.json();
+    const json = await androidSafeGet(`${url}?action=items`);
     if (json.error) throw new Error(json.error);
     localStorage.setItem(KEY_URL, url);
     buildRoomsFromItems(json.items);
