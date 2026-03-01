@@ -426,21 +426,20 @@ async function boot() {
 // field ("data"), which is a "simple request" with no preflight.
 // ═══════════════════════════════════════════════════════════
 async function androidSafeGet(url) {
-  return fetch(url, {
-    method: 'GET',
-    redirect: 'follow',
-    cache: 'no-cache',
-  });
+  // Keep this as simple as possible — no extra headers, just follow redirects
+  // Apps Script does a redirect from /exec to /exec?... so redirect:follow is essential
+  return fetch(url, { redirect: 'follow' });
 }
 
 async function androidSafePost(url, payload) {
-  // Encode as form data — "simple request", no CORS preflight on Android
-  const body = 'data=' + encodeURIComponent(JSON.stringify(payload));
+  // Use URLSearchParams — browser automatically sets Content-Type correctly
+  // without triggering a CORS preflight on Android Chrome
+  const params = new URLSearchParams();
+  params.append('data', JSON.stringify(payload));
   return fetch(url, {
     method: 'POST',
     redirect: 'follow',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body,
+    body: params,
   });
 }
 
@@ -635,7 +634,8 @@ async function connectToSheet() {
     setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
     renderHome();
   } catch(e) {
-    showConnStatus('err', 'Could not connect. Check the URL is correct and the Script is deployed as a Web App with access set to Anyone.');
+    showConnStatus('err', 'Could not connect: ' + e.message + ' — Check URL is correct and deployed as Web App with access: Anyone');
+    console.error('Connect error:', e);
   }
   btn.textContent = 'Connect & Load Items';
   btn.classList.remove('loading');
