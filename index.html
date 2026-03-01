@@ -417,13 +417,41 @@ async function boot() {
 
 
 // ═══════════════════════════════════════════════════════════
+// ANDROID-SAFE FETCH HELPERS
+// Apps Script GET requests work fine as plain GET with redirect:follow.
+// Apps Script POST requests must NOT use Content-Type:application/json
+// because Android Chrome sends a CORS preflight for that content type,
+// and Apps Script cannot respond to OPTIONS preflights — causing Android
+// to block the request. Solution: POST the JSON as a URL-encoded form
+// field ("data"), which is a "simple request" with no preflight.
+// ═══════════════════════════════════════════════════════════
+async function androidSafeGet(url) {
+  return fetch(url, {
+    method: 'GET',
+    redirect: 'follow',
+    cache: 'no-cache',
+  });
+}
+
+async function androidSafePost(url, payload) {
+  // Encode as form data — "simple request", no CORS preflight on Android
+  const body = 'data=' + encodeURIComponent(JSON.stringify(payload));
+  return fetch(url, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
 // GOOGLE SHEETS — FETCH ITEMS
 // ═══════════════════════════════════════════════════════════
 async function fetchItemsFromSheet(url, silent=false) {
   if (!silent) showLoadingBanner('Loading items from Google Sheets…');
   setSyncBadge('syncing', 'Loading…');
   try {
-    const res  = await fetch(`${url}?action=items`);
+    const res  = await androidSafeGet(`${url}?action=items`);
     const json = await res.json();
     if (json.error) throw new Error(json.error);
     localStorage.setItem(KEY_ITEMS, JSON.stringify(json.items));
@@ -466,7 +494,7 @@ async function syncToSheet() {
     user:   localStorage.getItem(KEY_USER) || 'Helper',
   };
   try {
-    const res  = await fetch(url, { method:'POST', body: JSON.stringify(payload) });
+    const res  = await androidSafePost(url, payload);
     const json = await res.json();
     if (json.error) throw new Error(json.error);
     localStorage.removeItem(KEY_PENDING);
@@ -484,17 +512,14 @@ async function logSweepHistory(roomNames, checked, needed) {
   if (!url) return;
   const now = new Date();
   try {
-    await fetch(url, {
-      method: 'POST',
-      body: JSON.stringify({
-        action:       'history',
-        sweepDate:    now.toLocaleDateString('en-AU'),
-        sweepTime:    now.toLocaleTimeString('en-AU', {hour:'2-digit',minute:'2-digit'}),
-        completedBy:  localStorage.getItem(KEY_USER) || 'Helper',
-        rooms:        roomNames,
-        itemsChecked: checked,
-        itemsNeeded:  needed,
-      })
+    await androidSafePost(url, {
+      action:       'history',
+      sweepDate:    now.toLocaleDateString('en-AU'),
+      sweepTime:    now.toLocaleTimeString('en-AU', {hour:'2-digit',minute:'2-digit'}),
+      completedBy:  localStorage.getItem(KEY_USER) || 'Helper',
+      rooms:        roomNames,
+      itemsChecked: checked,
+      itemsNeeded:  needed,
     });
   } catch(e) { console.warn('logHistory:', e); }
 }
@@ -504,7 +529,7 @@ async function attemptPendingSync(url) {
   if (!pendingRaw) return;
   try {
     const pending = JSON.parse(pendingRaw);
-    const res  = await fetch(url, { method:'POST', body: JSON.stringify(pending.payload) });
+    const res  = await androidSafePost(url, pending.payload);
     const json = await res.json();
     if (!json.error) {
       localStorage.removeItem(KEY_PENDING);
@@ -599,7 +624,7 @@ async function connectToSheet() {
   btn.textContent = 'Connecting…';
   btn.classList.add('loading');
   try {
-    const res  = await fetch(`${url}?action=items`);
+    const res  = await androidSafeGet(`${url}?action=items`);
     const json = await res.json();
     if (json.error) throw new Error(json.error);
     localStorage.setItem(KEY_URL, url);
