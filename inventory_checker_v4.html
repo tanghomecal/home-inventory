@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Home Inventory</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --rose-white:#FDF6F0; --blush:#F9EDE6; --blush-mid:#F0D8CC; --blush-dark:#E8C4B0;
+    --sage:#7A9E8E; --sage-light:#EAF2EE; --sage-mid:#C4DDD5; --sage-dark:#5A7A6C;
+    --terra:#C4614A; --terra-light:#FAEAE7; --terra-mid:#EDBAAF;
+    --charcoal:#2D2D2D; --charcoal-mid:#5A5A5A; --mid:#9A9A9A;
+    --amber:#C47A2A; --amber-light:#FEF5E7; --amber-mid:#F5D99A;
+    --red:#B94040; --red-light:#FDEAEA; --red-mid:#F0BBBB;
+    --white:#FFFFFF;
+    --must-bg:#FFF8EE; --must-border:#F0C060;
+    --shadow-sm:0 1px 6px rgba(196,97,74,0.08);
+    --radius:18px; --radius-sm:12px;
+    --font:'Nunito',sans-serif; --mono:'DM Mono',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  body{font-family:var(--font);background:var(--rose-white);color:var(--charcoal);min-height:100vh;overscroll-behavior:none;}
+  .view{display:none;}
+  .view.active{display:flex;flex-direction:column;min-height:100vh;}
+
+  /* ── SHARED HEADER ── */
+  .app-header{background:linear-gradient(145deg,#E8D5C8 0%,#DCCBBF 100%);padding:44px 16px 16px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(196,97,74,0.12);}
+  .header-row{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+  .back-btn{background:rgba(255,255,255,0.5);border:none;color:var(--charcoal);width:40px;height:40px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .back-btn:active{background:rgba(255,255,255,0.8);}
+  .header-title{flex:1;}
+  .header-eyebrow{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--terra);font-weight:700;}
+  .header-h2{font-size:26px;font-weight:800;letter-spacing:-0.4px;color:var(--charcoal);}
+  .header-sub{font-size:13px;color:var(--charcoal-mid);font-weight:500;margin-top:2px;}
+
+  /* ── SYNC BADGE ── */
+  .sync-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;}
+  .sync-badge.synced{background:var(--sage-light);color:var(--sage-dark);}
+  .sync-badge.pending{background:var(--amber-light);color:var(--amber);animation:badge-pulse 2s ease-in-out infinite;}
+  .sync-badge.syncing{background:#EEF;color:#558;}
+  .sync-badge.error{background:var(--red-light);color:var(--red);}
+  @keyframes badge-pulse{0%,100%{opacity:1;}50%{opacity:0.6;}}
+
+  /* ── HOME ── */
+  #view-home{background:var(--rose-white);}
+  .home-hero{background:linear-gradient(145deg,#E8D5C8 0%,#D4BFB5 100%);padding:52px 24px 24px;position:relative;overflow:hidden;}
+  .home-hero::before{content:'';position:absolute;top:-40px;right:-40px;width:180px;height:180px;background:rgba(255,255,255,0.15);border-radius:50%;}
+  .home-hero .eyebrow{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--terra);font-weight:700;margin-bottom:8px;}
+  .home-hero h1{font-size:34px;font-weight:800;letter-spacing:-0.5px;color:var(--charcoal);line-height:1.1;margin-bottom:6px;}
+  .home-hero .subtitle{font-size:15px;color:var(--charcoal-mid);}
+  .home-hero-actions{display:flex;align-items:center;justify-content:space-between;margin-top:14px;}
+  .settings-btn{background:rgba(255,255,255,0.5);border:none;padding:8px 14px;border-radius:20px;font-family:var(--font);font-size:13px;font-weight:700;color:var(--charcoal-mid);cursor:pointer;display:flex;align-items:center;gap:6px;}
+  .settings-btn:active{background:rgba(255,255,255,0.8);}
+
+  .home-search-wrap{padding:14px 16px 0;background:var(--rose-white);}
+  .search-box{display:flex;align-items:center;background:var(--white);border:2px solid var(--blush-mid);border-radius:var(--radius-sm);padding:0 14px;gap:10px;box-shadow:var(--shadow-sm);transition:border-color 0.2s;}
+  .search-box:focus-within{border-color:var(--sage);}
+  .search-box input{flex:1;background:transparent;border:none;outline:none;font-family:var(--font);font-size:16px;color:var(--charcoal);padding:14px 0;font-weight:500;}
+  .search-box input::placeholder{color:#C0B0A8;}
+  .search-icon{color:var(--blush-dark);font-size:18px;}
+  .search-clear{color:#C0B0A8;font-size:20px;cursor:pointer;display:none;}
+  .search-clear.visible{display:block;}
+  #search-results{display:none;background:var(--rose-white);flex:1;overflow-y:auto;padding:10px 16px 120px;}
+  #search-results.visible{display:block;}
+  .search-result-item{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--white);border-radius:var(--radius-sm);margin-bottom:8px;border:1.5px solid var(--blush-mid);box-shadow:var(--shadow-sm);}
+  .search-result-item.must-item{background:var(--must-bg);border-color:var(--must-border);}
+  .search-result-name{font-size:16px;font-weight:700;color:var(--charcoal);}
+  .search-result-name.must-name::after{content:' ★';color:var(--amber);}
+  .search-result-meta{font-size:12px;color:var(--mid);margin-top:2px;}
+
+  .home-stats{display:flex;gap:10px;padding:14px 16px;}
+  .stat-pill{flex:1;background:var(--white);border-radius:var(--radius-sm);padding:14px 10px;text-align:center;border:1.5px solid var(--blush-mid);box-shadow:var(--shadow-sm);}
+  .stat-pill .num{font-size:24px;font-weight:800;font-family:var(--mono);color:var(--charcoal);}
+  .stat-pill .lbl{font-size:10px;color:var(--mid);text-transform:uppercase;letter-spacing:1.5px;margin-top:2px;font-weight:600;}
+  .stat-pill.s-need .num{color:var(--terra);}
+  .stat-pill.s-ok .num{color:var(--sage);}
+
+  .last-check{padding:0 16px 10px;font-size:13px;color:var(--mid);font-weight:500;}
+  .last-check span{color:var(--charcoal-mid);}
+  .section-label{padding:4px 16px 8px;font-size:11px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;color:var(--blush-dark);}
+  .room-list{flex:1;padding:0 14px 110px;display:flex;flex-direction:column;gap:10px;}
+
+  .room-card{background:var(--white);border:1.5px solid var(--blush-mid);border-radius:var(--radius);padding:18px 20px 14px;cursor:pointer;transition:all 0.15s;position:relative;overflow:hidden;box-shadow:var(--shadow-sm);}
+  .room-card:active{transform:scale(0.98);border-color:var(--sage-mid);}
+  .room-card-top{display:flex;align-items:center;gap:14px;margin-bottom:12px;}
+  .room-icon{font-size:30px;flex-shrink:0;}
+  .room-info{flex:1;}
+  .room-name{font-size:20px;font-weight:800;color:var(--charcoal);letter-spacing:-0.3px;}
+  .room-meta{font-size:13px;color:var(--mid);margin-top:3px;font-weight:500;}
+  .room-badge{font-size:12px;font-weight:700;padding:5px 12px;border-radius:20px;white-space:nowrap;flex-shrink:0;}
+  .room-badge.needs{background:var(--terra-light);color:var(--terra);}
+  .room-badge.done{background:var(--sage-light);color:var(--sage-dark);}
+  .room-badge.unchecked{background:var(--blush);color:#B0907A;}
+  .room-progress{background:var(--blush);border-radius:4px;height:5px;}
+  .room-progress-bar{height:100%;background:linear-gradient(90deg,var(--sage),var(--sage-dark));border-radius:4px;transition:width 0.4s ease;}
+
+  .shop-float-btn{position:fixed;bottom:24px;left:16px;right:16px;background:linear-gradient(135deg,var(--sage),var(--sage-dark));color:white;border:none;border-radius:var(--radius);padding:20px;font-family:var(--font);font-size:17px;font-weight:800;cursor:pointer;box-shadow:0 8px 24px rgba(90,122,108,0.35);}
+  .shop-float-btn:active{transform:scale(0.98);}
+
+  /* Loading state */
+  .loading-banner{background:var(--blush);border:1px solid var(--blush-mid);border-radius:var(--radius-sm);padding:14px 18px;margin:14px 16px 0;font-size:14px;color:var(--charcoal-mid);font-weight:600;display:flex;align-items:center;gap:10px;display:none;}
+  .loading-banner.visible{display:flex;}
+  .spinner{width:18px;height:18px;border:2px solid var(--blush-mid);border-top-color:var(--terra);border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ── SETUP / SETTINGS VIEW ── */
+  #view-settings{background:var(--rose-white);}
+  .settings-scroll{flex:1;overflow-y:auto;padding:20px 16px 60px;}
+  .settings-card{background:var(--white);border:1.5px solid var(--blush-mid);border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:var(--shadow-sm);}
+  .settings-card h3{font-size:17px;font-weight:800;color:var(--charcoal);margin-bottom:6px;}
+  .settings-card p{font-size:14px;color:var(--charcoal-mid);line-height:1.6;margin-bottom:14px;font-weight:500;}
+  .settings-label{font-size:13px;font-weight:700;color:var(--charcoal-mid);margin-bottom:6px;display:block;text-transform:uppercase;letter-spacing:1px;}
+  .settings-input{width:100%;border:2px solid var(--blush-mid);border-radius:var(--radius-sm);padding:14px;font-family:var(--font);font-size:15px;color:var(--charcoal);background:var(--rose-white);outline:none;transition:border-color 0.2s;font-weight:500;}
+  .settings-input:focus{border-color:var(--sage);}
+  .connect-btn{width:100%;margin-top:12px;background:linear-gradient(135deg,var(--sage),var(--sage-dark));color:white;border:none;border-radius:var(--radius-sm);padding:16px;font-family:var(--font);font-size:16px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(90,122,108,0.3);}
+  .connect-btn:active{transform:scale(0.98);}
+  .connect-btn.loading{opacity:0.7;pointer-events:none;}
+  .conn-status{margin-top:12px;padding:12px 16px;border-radius:var(--radius-sm);font-size:14px;font-weight:600;display:none;}
+  .conn-status.ok{background:var(--sage-light);color:var(--sage-dark);display:block;}
+  .conn-status.err{background:var(--red-light);color:var(--red);display:block;}
+  .settings-divider{border:none;border-top:1px solid var(--blush-mid);margin:8px 0 16px;}
+  .danger-btn{width:100%;background:var(--red-light);color:var(--red);border:1.5px solid var(--red-mid);border-radius:var(--radius-sm);padding:14px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;margin-top:8px;}
+  .setup-steps{list-style:none;counter-reset:steps;}
+  .setup-steps li{counter-increment:steps;display:flex;gap:12px;margin-bottom:14px;font-size:14px;color:var(--charcoal-mid);font-weight:500;line-height:1.5;}
+  .setup-steps li::before{content:counter(steps);background:var(--terra);color:white;font-weight:800;font-size:13px;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+
+  /* ── ROOM VIEW ── */
+  #view-room{background:var(--rose-white);}
+  .room-header{background:linear-gradient(145deg,#E8D5C8,#DCCBBF);padding:44px 16px 16px;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(196,97,74,0.12);}
+  .room-header-top{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+  .progress-bar-wrap{background:rgba(255,255,255,0.4);border-radius:4px;height:5px;}
+  .progress-bar-fill{height:100%;background:var(--sage);border-radius:4px;transition:width 0.3s ease;}
+  .progress-label{font-size:12px;color:var(--charcoal-mid);margin-top:5px;font-weight:600;}
+
+  .mandatory-warning{display:none;margin:10px 14px 0;padding:12px 16px;background:#FFF3E0;border:2px solid #E8A030;border-radius:var(--radius-sm);font-size:14px;font-weight:700;color:var(--amber);animation:pulse-border 1.5s ease-in-out infinite;}
+  .mandatory-warning.visible{display:flex;align-items:center;gap:10px;}
+  @keyframes pulse-border{0%,100%{border-color:#E8A030;}50%{border-color:var(--amber);}}
+
+  .items-scroll{flex:1;overflow-y:auto;padding:0 0 140px;-webkit-overflow-scrolling:touch;}
+  .subcat-divider{background:var(--blush);border-top:1px solid var(--blush-mid);border-bottom:1px solid var(--blush-mid);padding:10px 18px;display:flex;align-items:center;gap:10px;margin-top:4px;}
+  .subcat-divider-text{font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--terra);flex:1;}
+  .subcat-divider-count{font-size:11px;color:var(--blush-dark);font-family:var(--mono);}
+  .subcat-items-wrap{padding:8px 12px 4px;}
+
+  .item-card{background:var(--white);border-radius:var(--radius-sm);padding:14px;margin-bottom:8px;border:2px solid var(--blush-mid);box-shadow:var(--shadow-sm);transition:border-color 0.2s,background 0.2s;}
+  .item-card.is-zero{border-color:var(--terra-mid);background:var(--terra-light);}
+  .item-card.is-ok{border-color:var(--sage-mid);background:var(--sage-light);}
+  .item-card.must-unchecked{border-color:#E8A030!important;background:#FFF3E0!important;box-shadow:0 0 0 3px rgba(228,160,48,0.2);animation:card-pulse 2s ease-in-out infinite;}
+  @keyframes card-pulse{0%,100%{box-shadow:0 0 0 2px rgba(228,160,48,0.15);}50%{box-shadow:0 0 0 4px rgba(228,160,48,0.35);}}
+
+  .item-row{display:flex;align-items:center;gap:10px;}
+  .item-name-wrap{flex:1;min-width:0;}
+  .item-name{font-size:17px;font-weight:700;line-height:1.3;color:var(--charcoal);}
+  .item-name.must::after{content:' ★';color:var(--amber);font-size:14px;}
+  .item-status{font-size:12px;font-weight:700;margin-top:3px;}
+  .item-status.s-need{color:var(--terra);}
+  .item-status.s-ok{color:var(--sage-dark);}
+  .item-status.s-unchecked{color:var(--mid);font-weight:500;}
+  .item-status.s-must-unchecked{color:var(--amber);}
+
+  .qty-cluster{display:flex;align-items:stretch;border-radius:var(--radius-sm);overflow:hidden;border:2px solid var(--blush-mid);flex-shrink:0;}
+  .item-card.is-zero .qty-cluster{border-color:var(--terra-mid);}
+  .item-card.is-ok .qty-cluster{border-color:var(--sage-mid);}
+  .item-card.must-unchecked .qty-cluster{border-color:#E8A030;}
+  .qbtn{width:46px;height:46px;border:none;background:var(--blush);color:var(--charcoal);font-size:24px;font-weight:300;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:var(--font);transition:background 0.1s;flex-shrink:0;}
+  .qbtn:active{background:var(--blush-mid);}
+  .qbtn.plus{background:var(--sage);color:white;}
+  .qbtn.plus:active{background:var(--sage-dark);}
+  .qnum{width:46px;height:46px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;font-family:var(--mono);color:var(--charcoal);background:var(--white);border-left:1px solid var(--blush-mid);border-right:1px solid var(--blush-mid);}
+  .qnum.zero{color:var(--terra);background:var(--terra-light);}
+  .qnum.positive{color:var(--sage-dark);}
+  .qnum.unchecked{color:#D0C0B8;font-size:14px;font-weight:500;}
+
+  .item-note-row{margin-top:10px;}
+  .note-tap{font-size:13px;color:#C0B0A8;cursor:pointer;padding:7px 12px;border:1.5px dashed var(--blush-mid);border-radius:8px;display:inline-block;font-weight:500;transition:all 0.15s;}
+  .note-tap.has-note{color:var(--amber);border-color:var(--amber-mid);background:var(--amber-light);border-style:solid;}
+
+  .room-footer{position:fixed;bottom:0;left:0;right:0;padding:10px 16px 28px;background:var(--rose-white);border-top:1px solid var(--blush-mid);}
+  .done-room-btn{width:100%;border:none;border-radius:var(--radius);padding:18px;font-family:var(--font);font-size:17px;font-weight:800;cursor:pointer;transition:all 0.2s;}
+  .done-room-btn.unlocked{background:linear-gradient(135deg,var(--sage),var(--sage-dark));color:white;box-shadow:0 6px 20px rgba(90,122,108,0.3);}
+  .done-room-btn.locked{background:var(--blush);color:var(--blush-dark);cursor:not-allowed;}
+  .done-room-btn.unlocked:active{transform:scale(0.98);}
+  .lock-reason{font-size:13px;font-weight:600;color:var(--amber);text-align:center;margin-bottom:6px;min-height:18px;}
+
+  /* ── NOTE MODAL ── */
+  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(45,45,45,0.5);z-index:999;align-items:flex-end;}
+  .modal-overlay.active{display:flex;}
+  .modal-sheet{background:var(--white);width:100%;border-radius:24px 24px 0 0;padding:20px 20px 40px;animation:slideUp 0.25s ease;}
+  @keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+  .modal-handle{width:40px;height:4px;background:var(--blush-mid);border-radius:2px;margin:0 auto 18px;}
+  .modal-title{font-size:18px;font-weight:800;margin-bottom:14px;color:var(--charcoal);}
+  .modal-textarea{width:100%;border:2px solid var(--blush-mid);border-radius:var(--radius-sm);padding:14px;font-family:var(--font);font-size:16px;color:var(--charcoal);background:var(--rose-white);resize:none;height:90px;outline:none;transition:border-color 0.2s;font-weight:500;}
+  .modal-textarea:focus{border-color:var(--sage);}
+  .modal-btns{display:flex;gap:10px;margin-top:12px;}
+  .modal-clear{padding:15px 14px;border:2px solid var(--terra-mid);border-radius:var(--radius-sm);background:transparent;font-family:var(--font);font-size:13px;font-weight:700;color:var(--terra);cursor:pointer;}
+  .modal-cancel{flex:1;padding:15px;border:2px solid var(--blush-mid);border-radius:var(--radius-sm);background:transparent;font-family:var(--font);font-size:15px;font-weight:700;color:var(--mid);cursor:pointer;}
+  .modal-save{flex:2;padding:15px;border:none;border-radius:var(--radius-sm);background:var(--sage);font-family:var(--font);font-size:15px;font-weight:800;color:white;cursor:pointer;}
+
+  /* ── SHOPPING VIEW ── */
+  #view-shopping{background:var(--rose-white);}
+  .shop-scroll{flex:1;overflow-y:auto;padding:14px 14px 120px;}
+  .shop-summary{background:var(--charcoal);border-radius:var(--radius);padding:16px 20px;display:flex;gap:16px;margin-bottom:18px;}
+  .shop-summary-stat{flex:1;text-align:center;}
+  .shop-summary-stat .n{font-size:28px;font-weight:800;font-family:var(--mono);color:white;}
+  .shop-summary-stat .l{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#777;margin-top:2px;font-weight:700;}
+  .shop-summary-stat.red .n{color:#F19090;}
+  .shop-summary-stat.amber .n{color:#F5C870;}
+  .shop-store-label{font-size:11px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;color:var(--blush-dark);padding:8px 4px;border-bottom:2px solid var(--blush-mid);margin-bottom:8px;margin-top:20px;}
+  .shop-item{display:flex;align-items:flex-start;gap:12px;padding:13px 14px;background:var(--white);border-radius:var(--radius-sm);margin-bottom:6px;border:1.5px solid var(--blush-mid);box-shadow:var(--shadow-sm);}
+  .shop-item.must-shop{border-left:4px solid var(--amber-mid);background:var(--must-bg);}
+  .shop-check{width:30px;height:30px;border:2px solid var(--blush-mid);border-radius:8px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;margin-top:1px;}
+  .shop-check.checked{background:var(--sage);border-color:var(--sage);}
+  .shop-check.checked::after{content:'✓';color:white;font-size:15px;font-weight:800;}
+  .shop-item-name{font-size:15px;font-weight:700;color:var(--charcoal);}
+  .shop-item.checked-item .shop-item-name{text-decoration:line-through;color:var(--mid);}
+  .shop-note-text{font-size:12px;color:var(--amber);font-style:italic;display:block;margin-top:3px;font-weight:500;}
+  .empty-shop{text-align:center;padding:60px 24px;}
+  .empty-shop .icon{font-size:56px;margin-bottom:16px;}
+  .empty-shop h3{font-size:22px;font-weight:800;color:var(--charcoal);margin-bottom:8px;}
+  .empty-shop p{font-size:15px;line-height:1.6;color:var(--mid);font-weight:500;}
+  .shop-footer{position:fixed;bottom:0;left:0;right:0;padding:10px 16px 28px;background:var(--rose-white);border-top:1px solid var(--blush-mid);display:flex;gap:10px;}
+  .back-home-btn{padding:16px 20px;background:var(--blush);color:var(--charcoal-mid);border:none;border-radius:var(--radius);font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;}
+  .share-btn{flex:1;background:linear-gradient(135deg,var(--sage),var(--sage-dark));color:white;border:none;border-radius:var(--radius);padding:16px;font-family:var(--font);font-size:16px;font-weight:800;cursor:pointer;}
+
+  /* Toast */
+  .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--charcoal);color:white;padding:12px 22px;border-radius:24px;font-size:14px;font-weight:700;z-index:9999;opacity:0;transition:opacity 0.25s;white-space:nowrap;pointer-events:none;}
+  .toast.show{opacity:1;}
+  @keyframes shake{0%,100%{transform:translateX(0);}20%{transform:translateX(-6px);}40%{transform:translateX(6px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}}
+  .shake{animation:shake 0.4s ease;}
+</style>
+</head>
+<body>
+
+<!-- ══════════ HOME ══════════ -->
+<div id="view-home" class="view active">
+  <div class="home-hero">
+    <div class="eyebrow">Home Inventory</div>
+    <h1>Stock Check</h1>
+    <div class="subtitle">Tap a room to begin · or search any item</div>
+    <div class="home-hero-actions">
+      <div id="sync-badge" class="sync-badge synced" onclick="manualSync()">✓ Synced</div>
+      <button class="settings-btn" onclick="showView('settings')">⚙️ Settings</button>
+    </div>
+  </div>
+  <div class="home-search-wrap">
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="search-input" placeholder="Search any item…" autocomplete="off" autocorrect="off" spellcheck="false" oninput="onSearch(this.value)">
+      <span class="search-clear" id="search-clear" onclick="clearSearch()">✕</span>
+    </div>
+  </div>
+  <div id="search-results"></div>
+  <div id="home-main">
+    <div id="loading-banner" class="loading-banner">
+      <div class="spinner"></div>
+      <span id="loading-text">Loading items from Google Sheets…</span>
+    </div>
+    <div class="home-stats">
+      <div class="stat-pill s-need"><div class="num" id="stat-need">—</div><div class="lbl">Need to Buy</div></div>
+      <div class="stat-pill s-ok"><div class="num" id="stat-checked">—</div><div class="lbl">Checked</div></div>
+      <div class="stat-pill"><div class="num" id="stat-total">—</div><div class="lbl">Total Items</div></div>
+    </div>
+    <div class="last-check" id="last-check-label">Last check: <span>Never</span></div>
+    <div class="section-label">Rooms</div>
+    <div class="room-list" id="room-list"></div>
+  </div>
+  <button class="shop-float-btn" onclick="showShopping()">View Shopping List →</button>
+</div>
+
+<!-- ══════════ SETTINGS ══════════ -->
+<div id="view-settings" class="view">
+  <div class="app-header">
+    <div class="header-row">
+      <button class="back-btn" onclick="goHome()">←</button>
+      <div class="header-title">
+        <div class="header-eyebrow">Configuration</div>
+        <div class="header-h2">Settings</div>
+      </div>
+    </div>
+  </div>
+  <div class="settings-scroll">
+
+    <div class="settings-card">
+      <h3>🔗 Google Sheets Connection</h3>
+      <p>Paste your Apps Script Web App URL below. This connects the app to your Google Sheet so items and stock counts sync automatically.</p>
+      <label class="settings-label">Web App URL</label>
+      <input class="settings-input" type="url" id="webAppUrl" placeholder="https://script.google.com/macros/s/…/exec">
+      <button class="connect-btn" id="connect-btn" onclick="connectToSheet()">Connect &amp; Load Items</button>
+      <div class="conn-status" id="conn-status"></div>
+    </div>
+
+    <div class="settings-card">
+      <h3>📋 Setup Instructions</h3>
+      <ol class="setup-steps">
+        <li>Download the <strong>HomeInventory_GoogleSheet_Template.xlsx</strong> file and upload it to Google Drive. Right-click → Open with → Google Sheets.</li>
+        <li>In Google Sheets, click <strong>Extensions → Apps Script</strong>. Delete the existing code, paste in the <strong>HomeInventory_AppsScript.js</strong> file contents, and click Save.</li>
+        <li>Click <strong>Deploy → New deployment</strong>. Set type to <em>Web app</em>, Execute as <em>Me</em>, Who has access <em>Anyone</em>. Click Deploy and authorise with your Google account.</li>
+        <li>Copy the <strong>Web App URL</strong> from the deployment screen, paste it into the field above, and tap Connect.</li>
+        <li>The app will load your item list from the Sheet. Any items added or changed in the Sheet will appear next time the app loads.</li>
+      </ol>
+    </div>
+
+    <div class="settings-card">
+      <h3>👤 Your Name (for sweep log)</h3>
+      <p>This name appears in the Sweep History tab of the Google Sheet so the Administrator knows who completed each check.</p>
+      <label class="settings-label">Your name</label>
+      <input class="settings-input" type="text" id="userName" placeholder="e.g. Helper, Maria, Mum…" oninput="saveName(this.value)">
+    </div>
+
+    <div class="settings-card">
+      <h3>⚠️ Reset Data</h3>
+      <p>This clears all locally saved stock counts. Does not affect the Google Sheet. Use if you want to start a fresh sweep from scratch.</p>
+      <button class="danger-btn" onclick="confirmReset()">Clear All Stock Counts</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ ROOM ══════════ -->
+<div id="view-room" class="view">
+  <div class="room-header">
+    <div class="room-header-top">
+      <button class="back-btn" onclick="goHome()">←</button>
+      <div class="header-title">
+        <div class="header-eyebrow" id="room-eyebrow">Room</div>
+        <div class="header-h2" id="room-title-text">—</div>
+      </div>
+    </div>
+    <div class="progress-bar-wrap"><div class="progress-bar-fill" id="room-progress-bar" style="width:0%"></div></div>
+    <div class="progress-label" id="room-progress-label">0 of 0 checked</div>
+  </div>
+  <div class="mandatory-warning" id="mandatory-warning">
+    <span style="font-size:20px;flex-shrink:0;">⚠️</span>
+    <span id="mandatory-warning-text">Must-have items still unchecked — scroll to find pulsing amber cards.</span>
+  </div>
+  <div class="items-scroll" id="items-scroll"></div>
+  <div class="room-footer">
+    <div class="lock-reason" id="lock-reason"></div>
+    <button class="done-room-btn locked" id="done-room-btn" onclick="tryFinishRoom()">Done with this room ✓</button>
+  </div>
+</div>
+
+<!-- ══════════ SHOPPING ══════════ -->
+<div id="view-shopping" class="view">
+  <div class="app-header">
+    <div class="header-row">
+      <button class="back-btn" onclick="goHome()">←</button>
+      <div class="header-title">
+        <div class="header-h2">Shopping List</div>
+        <div class="header-sub" id="shop-sub-text">—</div>
+      </div>
+    </div>
+  </div>
+  <div class="shop-scroll" id="shop-scroll"></div>
+  <div class="shop-footer">
+    <button class="back-home-btn" onclick="goHome()">← Home</button>
+    <button class="share-btn" onclick="shareList()">Share 📤</button>
+  </div>
+</div>
+
+<!-- Note Modal -->
+<div class="modal-overlay" id="note-modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="note-modal-title">Add Note</div>
+    <textarea class="modal-textarea" id="note-textarea" placeholder="e.g. Buy organic, large size, specific brand…"></textarea>
+    <div class="modal-btns">
+      <button class="modal-clear" onclick="clearNote()">Clear</button>
+      <button class="modal-cancel" onclick="closeNoteModal()">Cancel</button>
+      <button class="modal-save" onclick="saveNote()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CONSTANTS & STATE
+// ═══════════════════════════════════════════════════════════
+const KEY_STATE    = 'inv_state_v4';
+const KEY_ITEMS    = 'inv_items_v4';
+const KEY_URL      = 'inv_webAppUrl';
+const KEY_USER     = 'inv_userName';
+const KEY_PENDING  = 'inv_pendingSync';
+
+// Item data — loaded from Google Sheets (no hardcoded items)
+let ROOMS     = [];
+let ALL_ITEMS = [];
+let ITEM_MAP  = {};
+
+// ═══════════════════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════════════════
+async function boot() {
+  loadLocalState();
+  loadSettings();
+
+  // Try cached items first (instant load)
+  const cachedItems = localStorage.getItem(KEY_ITEMS);
+  if (cachedItems) {
+    buildRoomsFromItems(JSON.parse(cachedItems));
+    renderHome();
+  } else {
+    renderHome(); // shows "not connected" prompt
+  }
+
+  // Fetch live items from Sheet if URL is set
+  const url = localStorage.getItem(KEY_URL);
+  if (url) {
+    await fetchItemsFromSheet(url, !!cachedItems);
+    await attemptPendingSync(url);
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// GOOGLE SHEETS — FETCH ITEMS
+// ═══════════════════════════════════════════════════════════
+async function fetchItemsFromSheet(url, silent=false) {
+  if (!silent) showLoadingBanner('Loading items from Google Sheets…');
+  setSyncBadge('syncing', 'Loading…');
+  try {
+    const res  = await fetch(`${url}?action=items`);
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    localStorage.setItem(KEY_ITEMS, JSON.stringify(json.items));
+    buildRoomsFromItems(json.items);
+    renderHome();
+    setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
+    hideLoadingBanner();
+    if (!silent) showToast(`✓ ${json.count} items loaded from Sheet`);
+  } catch(e) {
+    setSyncBadge('error', '⚠ Offline');
+    hideLoadingBanner();
+    if (!silent) showToast('Could not reach Google Sheets — using cached list');
+    console.warn('fetchItems:', e);
+  }
+}
+
+function showSetupPrompt() {
+  const list = document.getElementById('room-list');
+  list.innerHTML = `
+    <div style="text-align:center;padding:40px 10px;">
+      <div style="font-size:48px;margin-bottom:14px;">🔗</div>
+      <div style="font-size:18px;font-weight:800;color:var(--charcoal);margin-bottom:8px;">Not connected yet</div>
+      <div style="font-size:14px;color:var(--mid);line-height:1.6;margin-bottom:18px;font-weight:500;">Tap Settings to connect to your Google Sheet and load your item list.</div>
+      <button onclick="showView('settings')" style="background:var(--sage);color:white;border:none;padding:14px 28px;border-radius:var(--radius-sm);font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer;">⚙️ Open Settings</button>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// GOOGLE SHEETS — SYNC STOCK
+// ═══════════════════════════════════════════════════════════
+async function syncToSheet() {
+  const url = localStorage.getItem(KEY_URL);
+  if (!url) return;
+
+  setSyncBadge('syncing', 'Syncing…');
+  const payload = {
+    action: 'sync',
+    stock:  state,
+    date:   new Date().toLocaleDateString('en-AU'),
+    user:   localStorage.getItem(KEY_USER) || 'Helper',
+  };
+  try {
+    const res  = await fetch(url, { method:'POST', body: JSON.stringify(payload) });
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    localStorage.removeItem(KEY_PENDING);
+    setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
+  } catch(e) {
+    // Mark as pending — will retry when online
+    localStorage.setItem(KEY_PENDING, JSON.stringify({ payload, ts: Date.now() }));
+    setSyncBadge('pending', '⟳ Sync pending');
+    console.warn('sync failed:', e);
+  }
+}
+
+async function logSweepHistory(roomNames, checked, needed) {
+  const url = localStorage.getItem(KEY_URL);
+  if (!url) return;
+  const now = new Date();
+  try {
+    await fetch(url, {
+      method: 'POST',
+      body: JSON.stringify({
+        action:       'history',
+        sweepDate:    now.toLocaleDateString('en-AU'),
+        sweepTime:    now.toLocaleTimeString('en-AU', {hour:'2-digit',minute:'2-digit'}),
+        completedBy:  localStorage.getItem(KEY_USER) || 'Helper',
+        rooms:        roomNames,
+        itemsChecked: checked,
+        itemsNeeded:  needed,
+      })
+    });
+  } catch(e) { console.warn('logHistory:', e); }
+}
+
+async function attemptPendingSync(url) {
+  const pendingRaw = localStorage.getItem(KEY_PENDING);
+  if (!pendingRaw) return;
+  try {
+    const pending = JSON.parse(pendingRaw);
+    const res  = await fetch(url, { method:'POST', body: JSON.stringify(pending.payload) });
+    const json = await res.json();
+    if (!json.error) {
+      localStorage.removeItem(KEY_PENDING);
+      setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
+      showToast('✓ Pending data synced to Sheet');
+    }
+  } catch(e) {
+    setSyncBadge('pending', '⟳ Sync pending');
+  }
+}
+
+async function manualSync() {
+  const url = localStorage.getItem(KEY_URL);
+  if (!url) { showView('settings'); return; }
+  await fetchItemsFromSheet(url, false);
+  await syncToSheet();
+}
+
+// ═══════════════════════════════════════════════════════════
+// BUILD ROOMS FROM ITEM LIST
+// ═══════════════════════════════════════════════════════════
+function buildRoomsFromItems(items) {
+  // Group items by room then subcategory, preserving natural order
+  const roomMap  = {};
+  const roomOrder = [];
+  items.forEach(item => {
+    const room   = item.room   || 'Other';
+    const subcat = item.subcat || 'General';
+    if (!roomMap[room]) { roomMap[room] = {}; roomOrder.push(room); }
+    if (!roomMap[room][subcat]) roomMap[room][subcat] = [];
+    roomMap[room][subcat].push({
+      id:    item.id,
+      name:  item.name,
+      must:  item.must,
+      store: item.store,
+      notes: item.notes,
+    });
+  });
+
+  // Assign icons
+  const ICONS = {
+    'Kitchen & Pantry':'🍳','Freezer':'🧊','Bathroom & Personal':'🛁',
+    'Baby & Kids':'👶','Laundry & Cleaning':'🧹','Storage & Household':'🗄️',
+    'Medicine Cabinet':'💊','Wet Market':'🥬','Chinese Ingredients':'🫙',
+  };
+
+  ROOMS = roomOrder.map(roomName => ({
+    id:      roomName.toLowerCase().replace(/[^a-z]/g,'_'),
+    name:    roomName,
+    icon:    ICONS[roomName] || '📦',
+    subcats: roomMap[roomName],
+  }));
+
+  // Rebuild flat lookup
+  ALL_ITEMS = [];
+  ITEM_MAP  = {};
+  // Merge Sheet items into ROOMS structure, then rebuild flat index
+  ROOMS.forEach(room => {
+    Object.entries(room.subcats).forEach(([subcat, items]) => {
+      items.forEach(item => {
+        const e = {...item, roomId:room.id, roomName:room.name, subcat};
+        ALL_ITEMS.push(e);
+        ITEM_MAP[item.id] = e;
+      });
+    });
+  });
+
+  // Ensure state has entries for all items
+  ALL_ITEMS.forEach(i => { if (!state[i.id]) state[i.id] = {qty:null, note:''}; });
+}
+
+// ═══════════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════════
+function loadSettings() {
+  const url  = localStorage.getItem(KEY_URL)  || '';
+  const name = localStorage.getItem(KEY_USER) || '';
+  document.getElementById('webAppUrl').value = url;
+  document.getElementById('userName').value  = name;
+  if (url) document.getElementById('conn-status').textContent = '✓ Connected: ' + url.substring(0,60) + '…';
+  if (url) document.getElementById('conn-status').className = 'conn-status ok';
+}
+
+function saveName(val) {
+  localStorage.setItem(KEY_USER, val.trim());
+}
+
+async function connectToSheet() {
+  const url = document.getElementById('webAppUrl').value.trim();
+  if (!url) { showConnStatus('err', 'Please paste a valid Web App URL.'); return; }
+  const btn = document.getElementById('connect-btn');
+  btn.textContent = 'Connecting…';
+  btn.classList.add('loading');
+  try {
+    const res  = await fetch(`${url}?action=items`);
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    localStorage.setItem(KEY_URL, url);
+    buildRoomsFromItems(json.items);
+    localStorage.setItem(KEY_ITEMS, JSON.stringify(json.items));
+    showConnStatus('ok', `✓ Connected — ${json.count} items loaded successfully.`);
+    showToast('✓ Connected to Google Sheets!');
+    setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
+    renderHome();
+  } catch(e) {
+    showConnStatus('err', 'Could not connect. Check the URL is correct and the Script is deployed as a Web App with access set to Anyone.');
+  }
+  btn.textContent = 'Connect & Load Items';
+  btn.classList.remove('loading');
+}
+
+function showConnStatus(type, msg) {
+  const el = document.getElementById('conn-status');
+  el.textContent = msg;
+  el.className = 'conn-status ' + type;
+}
+
+function confirmReset() {
+  if (confirm('Clear all stock counts? This cannot be undone. The Google Sheet is not affected.')) {
+    ALL_ITEMS.forEach(i => { state[i.id] = {qty:null, note:''}; });
+    saveState();
+    showToast('All counts cleared');
+    renderHome();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// LOCAL STATE
+// ═══════════════════════════════════════════════════════════
+function loadLocalState() {
+  try { const r = localStorage.getItem(KEY_STATE); if (r) state = JSON.parse(r); } catch(e) { state={}; }
+}
+function saveState() { localStorage.setItem(KEY_STATE, JSON.stringify(state)); }
+
+// ═══════════════════════════════════════════════════════════
+// VIEWS
+// ═══════════════════════════════════════════════════════════
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-'+id).classList.add('active');
+  window.scrollTo(0,0);
+}
+function goHome() { clearSearch(); renderHome(); showView('home'); }
+
+// ═══════════════════════════════════════════════════════════
+// HOME
+// ═══════════════════════════════════════════════════════════
+function updateStats() {
+  document.getElementById('stat-total').textContent = '—';
+  document.getElementById('stat-need').textContent  = '—';
+  document.getElementById('stat-checked').textContent = '—';
+}
+
+function renderHome() {
+  if (ROOMS.length === 0) { showSetupPrompt(); updateStats(); return; }
+  let total=0,checked=0,need=0;
+  ALL_ITEMS.forEach(item=>{
+    total++;
+    const s=state[item.id];
+    if (!s) return;
+    if (s.qty!==null){checked++;if(s.qty<1)need++;}
+    else if(item.must) need++;
+  });
+  document.getElementById('stat-total').textContent=total;
+  document.getElementById('stat-need').textContent=need;
+  document.getElementById('stat-checked').textContent=checked;
+  const lc=localStorage.getItem('last_check');
+  if(lc){const d=new Date(parseInt(lc));document.querySelector('#last-check-label span').textContent=d.toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}
+
+  // Check for pending sync badge
+  if (localStorage.getItem(KEY_PENDING)) setSyncBadge('pending','⟳ Sync pending');
+
+  const list=document.getElementById('room-list');
+  list.innerHTML='';
+
+  ROOMS.forEach(room=>{
+    let rt=0,rc=0,rn=0,mustUnc=0;
+    Object.values(room.subcats).forEach(items=>items.forEach(item=>{
+      rt++;
+      const s=state[item.id];
+      if(s&&s.qty!==null){rc++;if(s.qty<1)rn++;}
+      else if(item.must){rn++;mustUnc++;}
+    }));
+    const pct=rt>0?Math.round(rc/rt*100):0;
+    let bClass='unchecked',bText=`${rt} items`;
+    if(rc===rt&&rt>0){bClass=rn>0?'needs':'done';bText=rn>0?`${rn} needed`:'✓ Done';}
+    else if(rc>0||mustUnc>0){bClass=rn>0?'needs':'unchecked';bText=rn>0?`${rn} needed`:`${rc}/${rt}`;}
+    const card=document.createElement('div');
+    card.className='room-card';
+    card.innerHTML=`
+      <div class="room-card-top">
+        <div class="room-icon">${room.icon}</div>
+        <div class="room-info">
+          <div class="room-name">${room.name}</div>
+          <div class="room-meta">${rt} items · ${pct}% checked${mustUnc>0?' · ⚠️ '+mustUnc+' ★ unchecked':''}</div>
+        </div>
+        <div class="room-badge ${bClass}">${bText}</div>
+      </div>
+      <div class="room-progress"><div class="room-progress-bar" style="width:${pct}%"></div></div>`;
+    card.addEventListener('click',()=>openRoom(room.id));
+    list.appendChild(card);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════════════════════════════
+function onSearch(val){
+  const q=val.trim().toLowerCase();
+  const results=document.getElementById('search-results');
+  const main=document.getElementById('home-main');
+  const clearBtn=document.getElementById('search-clear');
+  if(!q){results.classList.remove('visible');results.style.display='none';main.style.display='block';clearBtn.classList.remove('visible');return;}
+  clearBtn.classList.add('visible');
+  results.style.display='block';results.classList.add('visible');main.style.display='none';
+  const matches=ALL_ITEMS.filter(i=>i.name.toLowerCase().includes(q));
+  results.innerHTML='';
+  if(!matches.length){results.innerHTML=`<div style="padding:30px;text-align:center;color:#B0907A;font-size:15px;font-weight:600;">No items found for "<strong>${val}</strong>"</div>`;return;}
+  matches.forEach(item=>{
+    const s=state[item.id]||{qty:null};
+    const div=document.createElement('div');
+    div.className='search-result-item'+(item.must?' must-item':'');
+    div.id='sr-'+item.id;
+    div.innerHTML=`
+      <div style="flex:1">
+        <div class="search-result-name ${item.must?'must-name':''}">${item.name}</div>
+        <div class="search-result-meta">${item.roomName} · ${item.subcat}</div>
+      </div>
+      <div>${buildClusterHTML(item.id,s.qty)}</div>`;
+    results.appendChild(div);
+  });
+}
+function clearSearch(){document.getElementById('search-input').value='';onSearch('');}
+
+// ═══════════════════════════════════════════════════════════
+// ROOM
+// ═══════════════════════════════════════════════════════════
+function openRoom(roomId){
+  currentRoomId=roomId;
+  const room=ROOMS.find(r=>r.id===roomId);
+  if(!room) return;
+  document.getElementById('room-eyebrow').textContent=room.icon+'  '+room.name;
+  document.getElementById('room-title-text').textContent=room.name;
+  renderRoomItems(room);
+  updateDoneButton();
+  showView('room');
+}
+
+function renderRoomItems(room){
+  const scroll=document.getElementById('items-scroll');
+  scroll.innerHTML='';
+  let total=0,checked=0;
+  Object.values(room.subcats).forEach(items=>items.forEach(item=>{total++;if((state[item.id]||{}).qty!==null)checked++;}));
+  updateRoomProgress(checked,total);
+  Object.entries(room.subcats).forEach(([subcatName,items])=>{
+    const div=document.createElement('div');
+    div.className='subcat-divider';
+    div.innerHTML=`<div class="subcat-divider-text">${subcatName}</div><div class="subcat-divider-count">${items.length}</div>`;
+    scroll.appendChild(div);
+    const wrap=document.createElement('div');
+    wrap.className='subcat-items-wrap';
+    items.forEach(item=>wrap.appendChild(buildItemCard(item)));
+    scroll.appendChild(wrap);
+  });
+}
+
+function updateRoomProgress(checked,total){
+  const pct=total>0?Math.round(checked/total*100):0;
+  document.getElementById('room-progress-bar').style.width=pct+'%';
+  document.getElementById('room-progress-label').textContent=`${checked} of ${total} checked`;
+}
+function updateRoomProgressFromState(){
+  const room=ROOMS.find(r=>r.id===currentRoomId);
+  if(!room) return;
+  let total=0,checked=0;
+  Object.values(room.subcats).forEach(items=>items.forEach(item=>{total++;if((state[item.id]||{}).qty!==null)checked++;}));
+  updateRoomProgress(checked,total);
+}
+
+// ═══════════════════════════════════════════════════════════
+// MANDATORY CHECK GATE
+// ═══════════════════════════════════════════════════════════
+function getUncheckedMustItems(){
+  const room=ROOMS.find(r=>r.id===currentRoomId);
+  if(!room) return [];
+  const unc=[];
+  Object.values(room.subcats).forEach(items=>items.forEach(item=>{if(item.must&&(state[item.id]||{}).qty===null)unc.push(item);}));
+  return unc;
+}
+
+function updateDoneButton(){
+  const unc=getUncheckedMustItems();
+  const btn=document.getElementById('done-room-btn');
+  const reason=document.getElementById('lock-reason');
+  const warn=document.getElementById('mandatory-warning');
+  if(unc.length===0){
+    btn.className='done-room-btn unlocked';
+    btn.textContent='Done with this room ✓';
+    reason.textContent='';
+    warn.classList.remove('visible');
+  } else {
+    btn.className='done-room-btn locked';
+    btn.textContent=`🔒  ${unc.length} ★ item${unc.length>1?'s':''} still need checking`;
+    reason.textContent='Please check all ★ must-have items first';
+    warn.classList.add('visible');
+    document.getElementById('mandatory-warning-text').textContent=`${unc.length} must-have item${unc.length>1?'s':''} still unchecked — scroll to find pulsing amber cards`;
+  }
+}
+
+async function tryFinishRoom(){
+  const unc=getUncheckedMustItems();
+  if(unc.length>0){
+    const btn=document.getElementById('done-room-btn');
+    btn.classList.add('shake');setTimeout(()=>btn.classList.remove('shake'),400);
+    showToast(`⚠️ ${unc.length} ★ item${unc.length>1?'s':''} not yet checked`);
+    const el=document.getElementById('card-'+unc[0].id);
+    if(el) el.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+  localStorage.setItem('last_check',Date.now());
+
+  // Count for history
+  const room=ROOMS.find(r=>r.id===currentRoomId);
+  let checked=0,needed=0;
+  Object.values(room.subcats).forEach(items=>items.forEach(item=>{
+    const s=state[item.id]||{};
+    if(s.qty!==null){checked++;if(s.qty<1)needed++;}
+    else if(item.must) needed++;
+  }));
+
+  // Navigate home immediately — sync happens in background
+  showToast('Room saved ✓');
+  goHome();
+
+  // Sync to Sheet after navigation (non-blocking)
+  syncToSheet().catch(()=>{});
+  logSweepHistory([room.name], checked, needed).catch(()=>{});
+}
+
+// ═══════════════════════════════════════════════════════════
+// ITEM CARD
+// ═══════════════════════════════════════════════════════════
+function buildClusterHTML(itemId,qty){
+  const qDisplay=qty===null?'?':qty;
+  const qClass=qty===null?'unchecked':qty<1?'zero':'positive';
+  return `<div class="qty-cluster">
+    <button class="qbtn minus" onclick="adjustQty('${itemId}',-1,event)">−</button>
+    <div class="qnum ${qClass}" id="qnum-${itemId}">${qDisplay}</div>
+    <button class="qbtn plus" onclick="adjustQty('${itemId}',1,event)">+</button>
+  </div>`;
+}
+
+function buildItemCard(item){
+  const s=state[item.id]||{qty:null,note:''};
+  const qty=s.qty; const note=s.note||'';
+  const isChecked=qty!==null;
+  const isZero=isChecked&&qty<1;
+  const isOk=isChecked&&qty>=1;
+  const isMustUnc=item.must&&!isChecked;
+  let cardClass='item-card';
+  if(isMustUnc)cardClass+=' must-unchecked';
+  else if(isZero)cardClass+=' is-zero';
+  else if(isOk)cardClass+=' is-ok';
+  let sClass='item-status ',sText='';
+  if(isMustUnc){sClass+='s-must-unchecked';sText='⚠️ Must check — tap + or − to record';}
+  else if(!isChecked){sClass+='s-unchecked';sText='Not checked yet';}
+  else if(isZero){sClass+='s-need';sText='Out of stock — add to shopping list';}
+  else{sClass+='s-ok';sText=`✅ In stock (${qty})`;}
+  const card=document.createElement('div');
+  card.className=cardClass; card.id='card-'+item.id;
+  card.innerHTML=`
+    <div class="item-row">
+      <div class="item-name-wrap">
+        <div class="item-name ${item.must?'must':''}">${item.name}</div>
+        <div class="${sClass}">${sText}</div>
+      </div>
+      ${buildClusterHTML(item.id,qty)}
+    </div>
+    <div class="item-note-row">
+      <div class="note-tap ${note?'has-note':''}" id="notetap-${item.id}"
+           onclick="openNoteModal('${item.id}','${item.name.replace(/'/g,"\\'")}')">
+        ${note?'📝 '+note:'+ Add note'}
+      </div>
+    </div>`;
+  return card;
+}
+
+function adjustQty(itemId,delta,e){
+  if(e) e.stopPropagation();
+  if(!state[itemId]) state[itemId]={qty:null,note:''};
+  let qty=state[itemId].qty; if(qty===null)qty=0;
+  qty=Math.max(0,qty+delta);
+  state[itemId].qty=qty;
+  saveState();
+  const qnum=document.getElementById('qnum-'+itemId);
+  if(qnum){qnum.textContent=qty;qnum.className='qnum '+(qty<1?'zero':'positive');}
+  const card=document.getElementById('card-'+itemId);
+  if(card){
+    const item=ITEM_MAP[itemId];
+    card.className='item-card'+(qty<1?' is-zero':' is-ok');
+    const sEl=card.querySelector('.item-status');
+    if(sEl){sEl.className='item-status '+(qty<1?'s-need':'s-ok');sEl.textContent=qty<1?'Out of stock — add to shopping list':`✅ In stock (${qty})`;}
+  }
+  updateRoomProgressFromState();
+  updateDoneButton();
+}
+
+// ═══════════════════════════════════════════════════════════
+// NOTE MODAL
+// ═══════════════════════════════════════════════════════════
+function openNoteModal(itemId,itemName){
+  noteTargetId=itemId;
+  document.getElementById('note-modal-title').textContent=itemName;
+  document.getElementById('note-textarea').value=(state[itemId]||{}).note||'';
+  document.getElementById('note-modal').classList.add('active');
+  setTimeout(()=>document.getElementById('note-textarea').focus(),300);
+}
+function closeNoteModal(){document.getElementById('note-modal').classList.remove('active');noteTargetId=null;}
+function clearNote(){document.getElementById('note-textarea').value='';}
+function saveNote(){
+  if(!noteTargetId) return;
+  if(!state[noteTargetId]) state[noteTargetId]={qty:null,note:''};
+  const note=document.getElementById('note-textarea').value.trim();
+  state[noteTargetId].note=note;
+  saveState();
+  const tap=document.getElementById('notetap-'+noteTargetId);
+  if(tap){tap.className='note-tap'+(note?' has-note':'');tap.textContent=note?'📝 '+note:'+ Add note';}
+  closeNoteModal(); showToast('Note saved');
+}
+document.getElementById('note-modal').addEventListener('click',e=>{if(e.target===document.getElementById('note-modal'))closeNoteModal();});
+
+// ═══════════════════════════════════════════════════════════
+// SHOPPING LIST
+// ═══════════════════════════════════════════════════════════
+function showShopping(){renderShoppingList();showView('shopping');}
+function renderShoppingList(){
+  const scroll=document.getElementById('shop-scroll');
+  scroll.innerHTML='';
+
+  // Split need-items into 3 stores
+  const lists = { Supermarket:[], Online:[], 'Wet Market':[] };
+  ALL_ITEMS.forEach(item=>{
+    const s=state[item.id]||{};
+    // Only add to shopping list if explicitly checked and qty = 0
+    if(s.qty===null || s.qty>0) return;
+    const store = item.store||'Supermarket';
+    const target = store==='Online'?'Online': store==='Wet Market'?'Wet Market':'Supermarket';
+    lists[target].push({...item});
+  });
+
+  const totalNeed = lists.Supermarket.length + lists.Online.length + lists['Wet Market'].length;
+  const totalMust = ALL_ITEMS.filter(i=>{
+    const s=state[i.id]||{};
+    return i.must&&s.qty!==null&&s.qty<1;
+  }).length;
+
+  document.getElementById('shop-sub-text').textContent=`${totalNeed} items needed · ${totalMust} must-haves`;
+
+  if(totalNeed===0){
+    scroll.innerHTML=`<div class="empty-shop"><div class="icon">✅</div><h3>All stocked up!</h3><p>Nothing needs buying right now.</p></div>`;
+    return;
+  }
+
+  // Grand summary
+  const sum=document.createElement('div'); sum.className='shop-summary';
+  sum.innerHTML=`
+    <div class="shop-summary-stat red"><div class="n">${totalNeed}</div><div class="l">Total Items</div></div>
+    <div class="shop-summary-stat"><div class="n">${lists.Supermarket.length}</div><div class="l">Supermarket</div></div>
+    <div class="shop-summary-stat"><div class="n">${lists.Online.length}</div><div class="l">Online</div></div>
+    <div class="shop-summary-stat"><div class="n">${lists['Wet Market'].length}</div><div class="l">Wet Market</div></div>`;
+  scroll.appendChild(sum);
+
+  // 3 collapsible sections — start expanded if they have items
+  const sections=[
+    { key:'Supermarket',  icon:'🛒', color:'#5A7A6C', bg:'#E8F5E9', border:'#5A7A6C33' },
+    { key:'Online',       icon:'💻', color:'#1A56BB', bg:'#E8F0FE', border:'#1A56BB33' },
+    { key:'Wet Market',   icon:'🥬', color:'#C47A2A', bg:'#FFF8E1', border:'#C47A2A33' },
+  ];
+
+  sections.forEach(({key,icon,color,bg,border})=>{
+    const items=lists[key];
+    const sectionId='shop-section-'+key.replace(/\s/g,'-');
+    const isOpen=items.length>0;
+
+    const section=document.createElement('div');
+    section.style.cssText='margin-top:16px;';
+
+    // Clickable header
+    const hdr=document.createElement('div');
+    hdr.style.cssText=`background:${bg};border-radius:${isOpen?'12px 12px 0 0':'12px'};padding:14px 16px;display:flex;align-items:center;gap:12px;border:1.5px solid ${border};cursor:pointer;transition:border-radius 0.2s;user-select:none;`;
+    hdr.setAttribute('data-section',sectionId);
+    hdr.innerHTML=`
+      <span style="font-size:22px;">${icon}</span>
+      <div style="flex:1">
+        <div style="font-size:15px;font-weight:800;color:${color};">${key}</div>
+        <div style="font-size:12px;color:var(--mid);font-weight:500;">${items.length} item${items.length!==1?'s':''} needed</div>
+      </div>
+      ${items.filter(i=>i.must).length>0?`<div style="background:var(--amber-light);color:var(--amber);font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px;margin-right:6px;">★ ${items.filter(i=>i.must).length} must</div>`:''}
+      <span id="chevron-${sectionId}" style="font-size:18px;color:${color};transition:transform 0.25s;display:inline-block;transform:rotate(${isOpen?'0':'180'}deg);">⌄</span>`;
+
+    // Body
+    const body=document.createElement('div');
+    body.id=sectionId;
+    body.style.cssText=`overflow:hidden;transition:max-height 0.3s ease;max-height:${isOpen?'4000px':'0'};`;
+
+    if(items.length===0){
+      const empty=document.createElement('div');
+      empty.style.cssText=`background:white;border:1.5px solid ${border};border-top:none;border-radius:0 0 12px 12px;padding:14px;text-align:center;color:var(--mid);font-size:14px;font-weight:500;`;
+      empty.textContent='✓ Nothing needed';
+      body.appendChild(empty);
+    } else {
+      items.sort((a,b)=>(b.must?1:0)-(a.must?1:0));
+      const listWrap=document.createElement('div');
+      listWrap.style.cssText=`border:1.5px solid ${border};border-top:none;border-radius:0 0 12px 12px;overflow:hidden;`;
+      items.forEach((item,idx)=>{
+        const note=(state[item.id]||{}).note;
+        const row=document.createElement('div');
+        row.className='shop-item'+(item.must?' must-shop':'');
+        row.style.cssText='border-radius:0;margin:0;'+(idx<items.length-1?'border-bottom:1px solid var(--blush-mid);':'');
+        row.id='shoprow-'+item.id;
+        row.innerHTML=`
+          <div class="shop-check" id="shopcheck-${item.id}" onclick="toggleShopCheck('${item.id}')"></div>
+          <div style="flex:1">
+            <div class="shop-item-name">${item.must?'★ ':''}${item.name}</div>
+            <div style="font-size:12px;color:var(--mid);margin-top:1px;font-weight:500;">${item.subcat||''}</div>
+            ${note?`<span class="shop-note-text">📝 ${note}</span>`:''}
+          </div>`;
+        listWrap.appendChild(row);
+      });
+      body.appendChild(listWrap);
+    }
+
+    // Toggle logic
+    hdr.addEventListener('click',()=>{
+      const bodyEl=document.getElementById(sectionId);
+      const chevron=document.getElementById('chevron-'+sectionId);
+      const isNowOpen=bodyEl.style.maxHeight!=='0px'&&bodyEl.style.maxHeight!=='0';
+      if(isNowOpen){
+        bodyEl.style.maxHeight='0';
+        chevron.style.transform='rotate(180deg)';
+        hdr.style.borderRadius='12px';
+      } else {
+        bodyEl.style.maxHeight='4000px';
+        chevron.style.transform='rotate(0deg)';
+        hdr.style.borderRadius='12px 12px 0 0';
+      }
+    });
+
+    section.appendChild(hdr);
+    section.appendChild(body);
+    scroll.appendChild(section);
+  });
+}
+
+function toggleShopCheck(itemId){
+  document.getElementById('shopcheck-'+itemId)?.classList.toggle('checked');
+  document.getElementById('shoprow-'+itemId)?.classList.toggle('checked-item');
+}
+
+function shareList(){
+  const lists={Supermarket:[],Online:[],'Wet Market':[]};
+  ALL_ITEMS.forEach(item=>{
+    const s=state[item.id]||{};
+    if(s.qty===null || s.qty>0) return; // only checked+empty
+    const store=item.store||'Supermarket';
+    const target=store==='Online'?'Online':store==='Wet Market'?'Wet Market':'Supermarket';
+    lists[target].push(item);
+  });
+  const total=lists.Supermarket.length+lists.Online.length+lists['Wet Market'].length;
+  if(!total){showToast('Nothing to share!');return;}
+  const fmt=(name,items)=>{
+    if(!items.length) return '';
+    const must=items.filter(i=>i.must).map(i=>'  ★ '+i.name);
+    const other=items.filter(i=>!i.must).map(i=>'  • '+i.name);
+    return `${name} (${items.length}):\n`+[...must,...other].join('\n')+'\n';
+  };
+  const text=`🛒 Shopping List — ${new Date().toLocaleDateString('en-AU')}\n\n`
+    +fmt('🛒 SUPERMARKET',lists.Supermarket)+'\n'
+    +fmt('💻 ONLINE',lists.Online)+'\n'
+    +fmt('🥬 WET MARKET',lists['Wet Market']);
+  if(navigator.share)navigator.share({title:'Shopping List',text});
+  else if(navigator.clipboard)navigator.clipboard.writeText(text).then(()=>showToast('Copied to clipboard!'));
+  else showToast('Use Chrome Share for this feature');
+}
+
+// ═══════════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════════
+function setSyncBadge(type,label){
+  const b=document.getElementById('sync-badge');
+  b.className='sync-badge '+type;
+  b.textContent=label;
+}
+function showLoadingBanner(msg){
+  const b=document.getElementById('loading-banner');
+  document.getElementById('loading-text').textContent=msg;
+  b.classList.add('visible');
+}
+function hideLoadingBanner(){document.getElementById('loading-banner').classList.remove('visible');}
+function fmtTime(){return new Date().toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'});}
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+boot();
+</script>
+</body>
+</html>
