@@ -87,6 +87,11 @@
   .last-qty-pill .pill-arrow{font-size:14px;color:var(--sage);}
   .last-qty-pill .pill-label{color:var(--mid);font-weight:600;}
   .last-qty-pill .pill-num{color:var(--charcoal);font-family:var(--mono);}
+  .uncheck-btn{font-size:11px;font-weight:700;color:var(--mid);background:var(--blush);border:1.5px solid var(--blush-mid);border-radius:8px;padding:4px 9px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all 0.15s;}
+  .uncheck-btn:active{background:var(--terra-light);color:var(--terra);border-color:var(--terra-mid);}
+  .push-buy-btn{font-size:11px;font-weight:700;color:var(--blue);background:var(--blueLt,#E8F0FE);border:1.5px solid #AABFEE;border-radius:8px;padding:4px 9px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all 0.15s;}
+  .push-buy-btn:active{background:#C5D5F8;}
+  .push-buy-btn.on-list{color:var(--sage-dark);background:var(--sage-light);border-color:var(--sage-mid);}
 
   /* room done overlay on card */
   .room-done-strip{display:none;margin-top:8px;padding:6px 12px;background:var(--sage-light);border-radius:8px;font-size:12px;font-weight:700;color:var(--sage-dark);text-align:center;}
@@ -180,7 +185,10 @@
   @keyframes pulse-border{0%,100%{border-color:#E8A030;}50%{border-color:var(--amber);}}
 
   .items-scroll{flex:1;overflow-y:auto;padding:0 0 140px;-webkit-overflow-scrolling:touch;}
-  .subcat-divider{background:var(--blush);border-top:1px solid var(--blush-mid);border-bottom:1px solid var(--blush-mid);padding:10px 18px;display:flex;align-items:center;gap:10px;margin-top:4px;}
+  .subcat-divider{background:var(--blush);border-top:1px solid var(--blush-mid);border-bottom:1px solid var(--blush-mid);padding:10px 18px;display:flex;align-items:center;gap:10px;margin-top:4px;cursor:pointer;user-select:none;transition:background 0.15s;}
+  .subcat-divider:active{background:var(--blush-mid);}
+  .subcat-chevron{font-size:16px;color:var(--terra);transition:transform 0.25s;display:inline-block;margin-left:auto;}
+  .subcat-body{overflow:hidden;transition:max-height 0.3s ease;}
   .subcat-divider-text{font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--terra);flex:1;}
   .subcat-divider-count{font-size:11px;color:var(--blush-dark);font-family:var(--mono);}
   .subcat-items-wrap{padding:8px 12px 4px;}
@@ -719,7 +727,7 @@ function buildRoomsFromItems(items) {
   ROOMS.forEach(room => {
     Object.entries(room.subcats).forEach(([subcat, items]) => {
       items.forEach(item => {
-        const e = {...item, roomId:room.id, roomName:room.name, subcat};
+        const e = {...item, roomId:room.id, roomName:room.name, subcat, min: item.min||0};
         ALL_ITEMS.push(e);
         ITEM_MAP[item.id] = e;
       });
@@ -1085,14 +1093,33 @@ function renderRoomItems(room){
   Object.values(room.subcats).forEach(items=>items.forEach(item=>{total++;if((state[item.id]||{}).qty!==null)checked++;}));
   updateRoomProgress(checked,total);
   Object.entries(room.subcats).forEach(([subcatName,items])=>{
+    const subcatId='subcat-'+subcatName.replace(/[^a-z0-9]/gi,'_');
+    const allDone=items.every(i=>(state[i.id]||{}).qty!==null);
+    const isOpen=!allDone;
+    const checkedCount=items.filter(i=>(state[i.id]||{}).qty!==null).length;
+
     const div=document.createElement('div');
     div.className='subcat-divider';
-    div.innerHTML=`<div class="subcat-divider-text">${subcatName}</div><div class="subcat-divider-count">${items.length}</div>`;
+    div.innerHTML=`
+      <div class="subcat-divider-text">${subcatName}</div>
+      <div class="subcat-divider-count">${checkedCount}/${items.length}</div>
+      <span class="subcat-chevron" id="chevron-${subcatId}" style="transform:rotate(${isOpen?'0':'180deg'})">⌄</span>`;
     scroll.appendChild(div);
+
     const wrap=document.createElement('div');
-    wrap.className='subcat-items-wrap';
+    wrap.className='subcat-items-wrap subcat-body';
+    wrap.id=subcatId;
+    wrap.style.maxHeight=isOpen?'9999px':'0';
     items.forEach(item=>wrap.appendChild(buildItemCard(item)));
     scroll.appendChild(wrap);
+
+    div.addEventListener('click',()=>{
+      const body=document.getElementById(subcatId);
+      const chevron=document.getElementById('chevron-'+subcatId);
+      const nowOpen=body.style.maxHeight!=='0px'&&body.style.maxHeight!=='0';
+      if(nowOpen){body.style.maxHeight='0';chevron.style.transform='rotate(180deg)';}
+      else{body.style.maxHeight='9999px';chevron.style.transform='rotate(0deg)';}
+    });
   });
 }
 
@@ -1222,17 +1249,19 @@ function buildItemCard(item){
   const s=state[item.id]||{qty:null,note:''};
   const qty=s.qty; const note=s.note||'';
   const isChecked=qty!==null;
+  const minStock=item.min||0;
+  const needsBuying=isChecked&&qty<=minStock;
   const isZero=isChecked&&qty<1;
-  const isOk=isChecked&&qty>=1;
+  const isOk=isChecked&&!needsBuying;
   const isMustUnc=item.must&&!isChecked;
   let cardClass='item-card';
   if(isMustUnc)cardClass+=' must-unchecked';
-  else if(isZero)cardClass+=' is-zero';
+  else if(needsBuying)cardClass+=' is-zero';
   else if(isOk)cardClass+=' is-ok';
   let sClass='item-status ',sText='';
   if(isMustUnc){sClass+='s-must-unchecked';sText='⚠️ Must check — tap + or − to record';}
   else if(!isChecked){sClass+='s-unchecked';sText='Not checked yet';}
-  else if(isZero){sClass+='s-need';sText='Out of stock — add to shopping list';}
+  else if(needsBuying){sClass+='s-need';sText=qty<1?'Out of stock — add to shopping list':`Low stock (${qty}, need ${minStock+1}+) — add to list`;}
   else{sClass+='s-ok';sText=`✅ In stock (${qty})`;}
 
   // Last entry reference — shown as tappable pill when item is unchecked
@@ -1253,16 +1282,28 @@ function buildItemCard(item){
     }
   }
 
+  const isForceBuy = !!(s.forceBuy);
+  const uncheckHtml = isChecked
+    ? `<button class="uncheck-btn" onclick="uncheckItem('${item.id}',event)">✕ Uncheck</button>`
+    : '';
+  const pushBuyHtml = isChecked
+    ? `<button class="push-buy-btn${isForceBuy?' on-list':''}" onclick="pushToBuy('${item.id}',event)">${isForceBuy?'🛒 On list':'🛒 Push to buy'}</button>`
+    : '';
+
   const card=document.createElement('div');
-  card.className=cardClass; card.id='card-'+item.id;
+  card.className=cardClass+(isForceBuy?' is-zero':''); card.id='card-'+item.id;
   card.innerHTML=`
     <div class="item-row">
       <div class="item-name-wrap">
-        <div class="item-name ${item.must?'must':''}">${item.name}</div>
+        <div class="item-name ${item.must?'must':''}">${item.name}${isForceBuy?' <span style="font-size:11px;color:var(--blue);font-weight:700;">🛒 forced</span>':''}</div>
         <div class="${sClass}">${sText}</div>
         ${lastHtml}
       </div>
-      ${buildClusterHTML(item.id,qty)}
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        ${buildClusterHTML(item.id,qty)}
+        ${uncheckHtml}
+        ${pushBuyHtml}
+      </div>
     </div>
     <div class="item-note-row">
       <div class="note-tap ${note?'has-note':''}" id="notetap-${item.id}"
@@ -1271,6 +1312,38 @@ function buildItemCard(item){
       </div>
     </div>`;
   return card;
+}
+
+function pushToBuy(itemId, e) {
+  if(e) e.stopPropagation();
+  if(!state[itemId]) state[itemId]={qty:null,note:''};
+  // Must have a qty entered first
+  if(state[itemId].qty===null){
+    showToast('Enter a quantity first before pushing to buy');
+    const card=document.getElementById('card-'+itemId);
+    if(card){card.classList.add('shake');setTimeout(()=>card.classList.remove('shake'),400);}
+    return;
+  }
+  state[itemId].forceBuy = !state[itemId].forceBuy;
+  saveState();
+  const item=ITEM_MAP[itemId];
+  if(!item) return;
+  const oldCard=document.getElementById('card-'+itemId);
+  if(oldCard) oldCard.replaceWith(buildItemCard(item));
+}
+
+function uncheckItem(itemId, e) {
+  if(e) e.stopPropagation();
+  if(!state[itemId]) return;
+  state[itemId].qty = null;
+  state[itemId].forceBuy = false;
+  saveState();
+  const item = ITEM_MAP[itemId];
+  if (!item) return;
+  const oldCard = document.getElementById('card-'+itemId);
+  if (oldCard) oldCard.replaceWith(buildItemCard(item));
+  updateRoomProgressFromState();
+  updateDoneButton();
 }
 
 function adjustQty(itemId,delta,e){
@@ -1287,7 +1360,12 @@ function adjustQty(itemId,delta,e){
     const item=ITEM_MAP[itemId];
     card.className='item-card'+(qty<1?' is-zero':' is-ok');
     const sEl=card.querySelector('.item-status');
-    if(sEl){sEl.className='item-status '+(qty<1?'s-need':'s-ok');sEl.textContent=qty<1?'Out of stock — add to shopping list':`✅ In stock (${qty})`;}
+    if(sEl){
+      const minS=(ITEM_MAP[itemId]||{}).min||0;
+      const needBuy=qty<=minS;
+      sEl.className='item-status '+(needBuy?'s-need':'s-ok');
+      sEl.textContent=needBuy?(qty<1?'Out of stock — add to shopping list':`Low stock (${qty}) — add to list`):`✅ In stock (${qty})`;
+    }
   }
   updateRoomProgressFromState();
   updateDoneButton();
@@ -1343,8 +1421,11 @@ function renderShoppingList(){
   const lists = { Supermarket:[], Online:[], 'Wet Market':[] };
   ALL_ITEMS.forEach(item=>{
     const s=state[item.id]||{};
-    // Only add to shopping list if explicitly checked and qty = 0
-    if(s.qty===null || s.qty>0) return;
+    // Add to shopping list if: qty checked AND (at/below min stock OR forceBuy flag set)
+    const minStock = item.min || 0;
+    const forced = !!(s.forceBuy);
+    if(s.qty===null) return;              // never add unchecked items
+    if(!forced && s.qty > minStock) return; // not forced and above threshold — skip
     const store = item.store||'Supermarket';
     const target = store==='Online'?'Online': store==='Wet Market'?'Wet Market':'Supermarket';
     lists[target].push({...item});
@@ -1361,6 +1442,39 @@ function renderShoppingList(){
   if(totalNeed===0){
     scroll.innerHTML=`<div class="empty-shop"><div class="icon">✅</div><h3>All stocked up!</h3><p>Nothing needs buying right now. All checked items are in stock.</p></div>`;
     return;
+  }
+
+  // Sweep status header
+  const sweepOn = localStorage.getItem(KEY_SWEEP) === 'true';
+  const doneRooms = getRoomsDone();
+  const totalRooms = ROOMS.length;
+  const uncheckedRooms = sweepOn ? ROOMS.filter(r=>!doneRooms.includes(r.id)) : [];
+  const totalMustItems = ALL_ITEMS.filter(i=>i.must).length;
+  const checkedMustItems = ALL_ITEMS.filter(i=>i.must&&(state[i.id]||{}).qty!==null).length;
+  const mustPct = totalMustItems>0 ? Math.round(checkedMustItems/totalMustItems*100) : 100;
+
+  if(sweepOn && (uncheckedRooms.length>0 || mustPct<100)){
+    const statusBanner=document.createElement('div');
+    statusBanner.style.cssText='background:var(--charcoal);border-radius:14px;padding:16px 18px;margin-bottom:14px;';
+    statusBanner.innerHTML=`
+      <div style="font-size:13px;font-weight:800;color:#AAA;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Sweep Status</div>
+      <div style="display:flex;gap:12px;margin-bottom:${uncheckedRooms.length>0?'12':'0'}px;">
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:28px;font-weight:800;font-family:var(--mono);color:${uncheckedRooms.length>0?'#F19090':'#90D0A0'};">${uncheckedRooms.length}</div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#777;margin-top:2px;">Rooms not done</div>
+        </div>
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:28px;font-weight:800;font-family:var(--mono);color:${mustPct<100?'#F5C870':'#90D0A0'};">${mustPct}%</div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#777;margin-top:2px;">★ Must-haves checked</div>
+        </div>
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:28px;font-weight:800;font-family:var(--mono);color:white;">${doneRooms.length}/${totalRooms}</div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#777;margin-top:2px;">Rooms complete</div>
+        </div>
+      </div>
+      ${uncheckedRooms.length>0?`<div style="background:rgba(241,144,144,0.15);border:1px solid rgba(241,144,144,0.3);border-radius:8px;padding:8px 12px;font-size:13px;color:#F19090;font-weight:600;">⚠️ Not yet checked: ${uncheckedRooms.map(r=>r.name).join(', ')}</div>`:''}
+    `;
+    scroll.appendChild(statusBanner);
   }
 
   // Grand summary
@@ -1429,10 +1543,16 @@ function renderShoppingList(){
         row.className='shop-item'+(item.must?' must-shop':'');
         row.style.cssText='border-radius:0;margin:0;'+(idx<items.length-1?'border-bottom:1px solid var(--blush-mid);':'');
         row.id='shoprow-'+item.id;
+        const curQty = (state[item.id]||{}).qty || 0;
+        const minS = item.min || 0;
         row.innerHTML=`
           <div class="shop-check" id="shopcheck-${item.id}" onclick="toggleShopCheck('${item.id}')"></div>
           <div style="flex:1">
-            <div class="shop-item-name">${item.must?'★ ':''}${item.name}</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span class="shop-item-name">${item.must?'★ ':''}${item.name}</span>
+              <span style="background:${curQty===0?'var(--red-light)':'var(--amber-light)'};color:${curQty===0?'var(--red)':'var(--amber)'};font-size:11px;font-weight:800;padding:2px 7px;border-radius:10px;font-family:var(--mono);">${curQty} left</span>
+              ${minS>0?`<span style="font-size:11px;color:var(--mid);font-style:italic;">min:${minS}</span>`:''}
+            </div>
             <div style="font-size:12px;color:var(--mid);margin-top:1px;font-weight:500;">${item.subcat||''}</div>
             ${note?`<span class="shop-note-text">📝 ${note}</span>`:''}
           </div>`;
@@ -1472,7 +1592,10 @@ function shareList(){
   const lists={Supermarket:[],Online:[],'Wet Market':[]};
   ALL_ITEMS.forEach(item=>{
     const s=state[item.id]||{};
-    if(s.qty===null || s.qty>0) return; // only checked+empty
+    const minS2=item.min||0;
+    const forced2=!!(s.forceBuy);
+    if(s.qty===null) return;
+    if(!forced2 && s.qty > minS2) return;
     const store=item.store||'Supermarket';
     const target=store==='Online'?'Online':store==='Wet Market'?'Wet Market':'Supermarket';
     lists[target].push(item);
