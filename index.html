@@ -625,6 +625,10 @@ async function syncToSheet() {
     if (json.error) throw new Error(json.error);
     localStorage.removeItem(KEY_PENDING);
     setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
+    // Snapshot state as "last" after every successful sync
+    // so "Last: N" is always up to date
+    const hasReal = ALL_ITEMS.some(i => (state[i.id]||{}).qty !== null);
+    if (hasReal) localStorage.setItem(KEY_LAST, JSON.stringify(state));
   } catch(e) {
     // Mark as pending — will retry when online
     localStorage.setItem(KEY_PENDING, JSON.stringify({ payload, ts: Date.now() }));
@@ -722,15 +726,18 @@ function buildRoomsFromItems(items) {
     });
   });
 
+  // If KEY_LAST has never been set, seed it from current state NOW
+  // (before we add null-qty placeholders for new items)
+  if (!localStorage.getItem(KEY_LAST)) {
+    const hasData = ALL_ITEMS.some(i => {
+      const s = state[i.id];
+      return s && s.qty !== null;
+    });
+    if (hasData) localStorage.setItem(KEY_LAST, JSON.stringify(JSON.parse(JSON.stringify(state))));
+  }
+
   // Ensure state has entries for all items
   ALL_ITEMS.forEach(i => { if (!state[i.id]) state[i.id] = {qty:null, note:''}; });
-
-  // If KEY_LAST has never been set, seed it from current state
-  // so "Last: N" shows for items that were previously synced
-  if (!localStorage.getItem(KEY_LAST)) {
-    const hasData = ALL_ITEMS.some(i => (state[i.id]||{}).qty !== null);
-    if (hasData) localStorage.setItem(KEY_LAST, JSON.stringify(state));
-  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -864,8 +871,12 @@ function startCheck() {
   // Confirm reset
   if (!confirm('Start a new stock check? All quantities will reset to ? — your last inventory will show as a reference on each item.')) return;
 
-  // Save current state as "last" reference
-  localStorage.setItem(KEY_LAST, JSON.stringify(state));
+  // Save current state as "last" reference — only if it has real data
+  // (don't overwrite a good snapshot with all-nulls)
+  const hasRealData = ALL_ITEMS.some(i => (state[i.id]||{}).qty !== null);
+  if (hasRealData) {
+    localStorage.setItem(KEY_LAST, JSON.stringify(state));
+  }
 
   // Reset all quantities to null (unchecked)
   ALL_ITEMS.forEach(i => { state[i.id] = { qty: null, note: state[i.id]?.note || '' }; });
