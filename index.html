@@ -54,6 +54,41 @@
   .settings-btn{background:rgba(255,255,255,0.5);border:none;padding:8px 14px;border-radius:20px;font-family:var(--font);font-size:13px;font-weight:700;color:var(--charcoal-mid);cursor:pointer;display:flex;align-items:center;gap:6px;}
   .settings-btn:active{background:rgba(255,255,255,0.8);}
 
+  /* ── HOME ACTION BAR ── */
+  .home-action-bar{display:flex;gap:10px;padding:14px 14px 0;}
+  .hab-btn{flex:1;border:none;border-radius:var(--radius-sm);padding:14px 10px;font-family:var(--font);font-size:13px;font-weight:800;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;transition:all 0.15s;}
+  .hab-btn .hab-icon{font-size:22px;}
+  .hab-btn .hab-label{font-size:11px;letter-spacing:0.5px;}
+  .hab-btn:active{transform:scale(0.96);}
+  .hab-connect{background:var(--terra-light);color:var(--terra);border:2px solid var(--terra-mid);}
+  .hab-connect.connected{background:var(--sage-light);color:var(--sage-dark);border-color:var(--sage-mid);}
+  .hab-user{background:var(--blush);color:var(--charcoal-mid);border:2px solid var(--blush-mid);position:relative;}
+  .hab-user.selected{background:var(--amber-light);color:var(--amber);border-color:var(--amber-mid);}
+  .hab-start{background:var(--charcoal);color:white;border:2px solid var(--charcoal);}
+  .hab-start:active{background:#444;}
+  .hab-start.disabled{background:var(--blush-mid);color:var(--mid);border-color:var(--blush-mid);cursor:not-allowed;}
+
+  /* user dropdown */
+  .user-dropdown-wrap{position:relative;}
+  .user-dropdown{position:absolute;top:calc(100% + 6px);left:0;right:0;background:white;border:2px solid var(--blush-mid);border-radius:var(--radius-sm);z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.12);overflow:hidden;display:none;}
+  .user-dropdown.open{display:block;}
+  .user-option{padding:14px 16px;font-family:var(--font);font-size:15px;font-weight:600;color:var(--charcoal);cursor:pointer;border-bottom:1px solid var(--blush-mid);}
+  .user-option:last-child{border-bottom:none;}
+  .user-option:active,.user-option:hover{background:var(--blush);}
+  .user-option.selected{color:var(--sage-dark);font-weight:800;}
+
+  /* last entry display on item card */
+  .last-entry{font-size:11px;color:#B8A89E;font-weight:600;font-family:var(--mono);background:var(--blush);padding:2px 8px;border-radius:10px;white-space:nowrap;}
+  .use-last-btn{font-size:12px;font-weight:700;color:var(--sage-dark);background:var(--sage-light);border:1.5px solid var(--sage-mid);border-radius:8px;padding:5px 10px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+  .use-last-btn:active{background:var(--sage-mid);}
+
+  /* room done overlay on card */
+  .room-done-strip{display:none;margin-top:8px;padding:6px 12px;background:var(--sage-light);border-radius:8px;font-size:12px;font-weight:700;color:var(--sage-dark);text-align:center;}
+  .room-done-strip.visible{display:block;}
+
+  /* unchecked rooms warning badge on shopping section */
+  .unchecked-rooms-badge{background:#FFF3E0;border:1.5px solid #E8A030;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:var(--amber);margin-top:6px;display:flex;align-items:center;gap:6px;}
+
   .home-search-wrap{padding:14px 16px 0;background:var(--rose-white);}
   .search-box{display:flex;align-items:center;background:var(--white);border:2px solid var(--blush-mid);border-radius:var(--radius-sm);padding:0 14px;gap:10px;box-shadow:var(--shadow-sm);transition:border-color 0.2s;}
   .search-box:focus-within{border-color:var(--sage);}
@@ -232,17 +267,37 @@
 </style>
 </head>
 <body>
+<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+<script>eruda.init();</script>
 
 <!-- ══════════ HOME ══════════ -->
 <div id="view-home" class="view active">
   <div class="home-hero">
     <div class="eyebrow">Home Inventory</div>
     <h1>Stock Check</h1>
-    <div class="subtitle">Tap a room to begin · or search any item</div>
+    <div class="subtitle" id="hero-subtitle">Connect to begin</div>
     <div class="home-hero-actions">
       <div id="sync-badge" class="sync-badge synced" onclick="manualSync()">✓ Synced</div>
       <button class="settings-btn" onclick="showView('settings')">⚙️ Settings</button>
     </div>
+  </div>
+  <!-- 3-button action bar -->
+  <div class="home-action-bar">
+    <button class="hab-btn hab-connect" id="hab-connect-btn" onclick="habConnect()">
+      <span class="hab-icon">🔗</span>
+      <span class="hab-label" id="hab-connect-label">Connect</span>
+    </button>
+    <div class="user-dropdown-wrap" style="flex:1;">
+      <button class="hab-btn hab-user" id="hab-user-btn" onclick="toggleUserDropdown()" style="width:100%;">
+        <span class="hab-icon">👤</span>
+        <span class="hab-label" id="hab-user-label">Select User</span>
+      </button>
+      <div class="user-dropdown" id="user-dropdown"></div>
+    </div>
+    <button class="hab-btn hab-start disabled" id="hab-start-btn" onclick="startCheck()">
+      <span class="hab-icon">▶️</span>
+      <span class="hab-label">Start Check</span>
+    </button>
   </div>
   <div class="home-search-wrap">
     <div class="search-box">
@@ -385,11 +440,21 @@ const KEY_ITEMS    = 'inv_items_v4';
 const KEY_URL      = 'inv_webAppUrl';
 const KEY_USER     = 'inv_userName';
 const KEY_PENDING  = 'inv_pendingSync';
+const KEY_LAST     = 'inv_lastState_v4';   // snapshot of state at end of last sweep
+const KEY_SWEEP    = 'inv_sweepActive';    // 'true' when a check is in progress
+const KEY_ROOMS_DONE = 'inv_roomsDone';   // JSON array of roomIds completed this sweep
+const KEY_USERS    = 'inv_users';         // cached user list from Sheet
 
 // Item data — loaded from Google Sheets (no hardcoded items)
 let ROOMS     = [];
 let ALL_ITEMS = [];
 let ITEM_MAP  = {};
+
+// Stock state — qty and notes per item, persisted in localStorage
+let state = {};
+
+// Current sweep tracking
+let USERS_LIST      = ['Maricor', 'Rechel'];  // default, overridden from Sheet
 
 // ═══════════════════════════════════════════════════════════
 // BOOT
@@ -398,63 +463,106 @@ async function boot() {
   loadLocalState();
   loadSettings();
 
+  // Load cached users
+  const cachedUsers = localStorage.getItem(KEY_USERS);
+  if (cachedUsers) USERS_LIST = JSON.parse(cachedUsers);
+  buildUserDropdown();
+
+  // Restore saved user selection
+  const savedUser = localStorage.getItem(KEY_USER);
+  if (savedUser) setActiveUser(savedUser);
+
   // Try cached items first (instant load)
   const cachedItems = localStorage.getItem(KEY_ITEMS);
   if (cachedItems) {
     buildRoomsFromItems(JSON.parse(cachedItems));
     renderHome();
   } else {
-    renderHome(); // shows "not connected" prompt
+    renderHome();
   }
 
-  // Fetch live items from Sheet if URL is set
+  updateActionBar();
+
+  // Fetch live items + users from Sheet if URL is set
   const url = localStorage.getItem(KEY_URL);
   if (url) {
     await fetchItemsFromSheet(url, !!cachedItems);
+    await fetchUsersFromSheet(url);
     await attemptPendingSync(url);
   }
 }
 
 
 // ═══════════════════════════════════════════════════════════
-// ANDROID-SAFE FETCH HELPERS
-// Apps Script GET requests work fine as plain GET with redirect:follow.
-// Apps Script POST requests must NOT use Content-Type:application/json
-// because Android Chrome sends a CORS preflight for that content type,
-// and Apps Script cannot respond to OPTIONS preflights — causing Android
-// to block the request. Solution: POST the JSON as a URL-encoded form
-// field ("data"), which is a "simple request" with no preflight.
-// ═══════════════════════════════════════════════════════════
-// JSONP completely bypasses CORS — works on all browsers including Android Chrome
-// Apps Script supports ?callback=fnName natively
-function jsonpRequest(url) {
+// FETCH HELPERS
+// Uses XMLHttpRequest instead of fetch() — XHR handles Apps Script redirects
+// correctly on Android Chrome where fetch() fails on redirect chains.
+function androidSafeGet(url) {
   return new Promise((resolve, reject) => {
-    const cbName = 'inv_cb_' + Date.now() + '_' + Math.floor(Math.random()*10000);
-    const script = document.createElement('script');
-    const timer = setTimeout(function() {
-      cleanup();
-      reject(new Error('Timed out — check URL and deployment'));
-    }, 15000);
-    function cleanup() {
-      clearTimeout(timer);
-      delete window[cbName];
-      if (script.parentNode) script.parentNode.removeChild(script);
-    }
-    window[cbName] = function(data) { cleanup(); resolve(data); };
-    script.onerror = function() { cleanup(); reject(new Error('Failed to load — check URL')); };
-    const sep = url.indexOf('?') >= 0 ? '&' : '?';
-    script.src = url + sep + 'callback=' + cbName;
-    document.head.appendChild(script);
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.onreadystatechange = function() {
+      console.log('XHR GET state:', xhr.readyState, 'status:', xhr.status, 'url:', url);
+    };
+    xhr.onload = function() {
+      console.log('XHR GET onload, status:', xhr.status, 'response length:', xhr.responseText.length);
+      console.log('XHR GET response preview:', xhr.responseText.substring(0, 200));
+      try { resolve(JSON.parse(xhr.responseText)); }
+      catch(e) { reject(new Error('Bad JSON: ' + xhr.responseText.substring(0, 200))); }
+    };
+    xhr.onerror = function() {
+      console.error('XHR GET onerror — status:', xhr.status, 'readyState:', xhr.readyState);
+      reject(new Error('XHR onerror — status:' + xhr.status + ' readyState:' + xhr.readyState));
+    };
+    xhr.ontimeout = function() {
+      console.error('XHR GET timed out after 15s');
+      reject(new Error('XHR timed out after 15s'));
+    };
+    xhr.timeout = 15000;
+    console.log('XHR GET sending to:', url);
+    xhr.send();
   });
 }
 
-async function androidSafeGet(url) {
-  return jsonpRequest(url);
+function androidSafePost(url, payload) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url, true);
+    xhr.setRequestHeader('Content-Type', 'text/plain');
+    xhr.onreadystatechange = function() {
+      console.log('XHR POST state:', xhr.readyState, 'status:', xhr.status);
+    };
+    xhr.onload = function() {
+      console.log('XHR POST onload, status:', xhr.status, 'response:', xhr.responseText.substring(0, 200));
+      try { resolve(JSON.parse(xhr.responseText)); }
+      catch(e) { reject(new Error('Bad JSON: ' + xhr.responseText.substring(0, 200))); }
+    };
+    xhr.onerror = function() {
+      console.error('XHR POST onerror — status:', xhr.status, 'readyState:', xhr.readyState);
+      reject(new Error('XHR onerror — status:' + xhr.status + ' readyState:' + xhr.readyState));
+    };
+    xhr.ontimeout = function() { reject(new Error('XHR POST timed out')); };
+    xhr.timeout = 15000;
+    console.log('XHR POST sending to:', url);
+    xhr.send(JSON.stringify(payload));
+  });
 }
 
-async function androidSafePost(url, payload) {
-  const sep = url.indexOf('?') >= 0 ? '&' : '?';
-  return jsonpRequest(url + sep + 'data=' + encodeURIComponent(JSON.stringify(payload)));
+// ═══════════════════════════════════════════════════════════
+// GOOGLE SHEETS — FETCH USERS
+// ═══════════════════════════════════════════════════════════
+async function fetchUsersFromSheet(url) {
+  try {
+    const json = await androidSafeGet(`${url}?action=users`);
+    if (json.users && json.users.length > 0) {
+      USERS_LIST = json.users;
+      localStorage.setItem(KEY_USERS, JSON.stringify(USERS_LIST));
+      buildUserDropdown();
+      // Re-apply saved user if still in list
+      const savedUser = localStorage.getItem(KEY_USER);
+      if (savedUser) setActiveUser(savedUser);
+    }
+  } catch(e) { console.warn('fetchUsers:', e); }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -471,6 +579,7 @@ async function fetchItemsFromSheet(url, silent=false) {
     renderHome();
     setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
     hideLoadingBanner();
+    updateActionBar();
     if (!silent) showToast(`✓ ${json.count} items loaded from Sheet`);
   } catch(e) {
     setSyncBadge('error', '⚠ Offline');
@@ -612,6 +721,154 @@ function buildRoomsFromItems(items) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// ACTION BAR
+// ═══════════════════════════════════════════════════════════
+function updateActionBar() {
+  const url        = localStorage.getItem(KEY_URL);
+  const user       = localStorage.getItem(KEY_USER) || '';
+  const hasItems   = ALL_ITEMS.length > 0;
+  const sweepActive = localStorage.getItem(KEY_SWEEP) === 'true';
+
+  // Connect button
+  const connectBtn   = document.getElementById('hab-connect-btn');
+  const connectLabel = document.getElementById('hab-connect-label');
+  if (url && hasItems) {
+    connectBtn.classList.add('connected');
+    connectLabel.textContent = '✓ Connected';
+  } else {
+    connectBtn.classList.remove('connected');
+    connectLabel.textContent = 'Connect';
+  }
+
+  // User button
+  const userBtn   = document.getElementById('hab-user-btn');
+  const userLabel = document.getElementById('hab-user-label');
+  if (user) {
+    userBtn.classList.add('selected');
+    userLabel.textContent = user;
+  } else {
+    userBtn.classList.remove('selected');
+    userLabel.textContent = 'Select User';
+  }
+
+  // Start Check button — enabled only when connected + user selected
+  const startBtn = document.getElementById('hab-start-btn');
+  if (url && hasItems && user) {
+    startBtn.classList.remove('disabled');
+  } else {
+    startBtn.classList.add('disabled');
+  }
+
+  // Hero subtitle
+  const sub = document.getElementById('hero-subtitle');
+  if (!url || !hasItems) {
+    sub.textContent = 'Tap Connect to begin';
+  } else if (!user) {
+    sub.textContent = 'Select a user to start';
+  } else if (sweepActive) {
+    const done = getRoomsDone();
+    sub.textContent = `Check in progress · ${done.length}/${ROOMS.length} rooms done`;
+  } else {
+    sub.textContent = 'Tap Start Check when ready';
+  }
+}
+
+function habConnect() {
+  const url = localStorage.getItem(KEY_URL);
+  if (url && ALL_ITEMS.length > 0) {
+    // Already connected — offer to refresh or go to settings
+    manualSync();
+  } else {
+    showView('settings');
+  }
+}
+
+function buildUserDropdown() {
+  const dd = document.getElementById('user-dropdown');
+  dd.innerHTML = '';
+  USERS_LIST.forEach(name => {
+    const opt = document.createElement('div');
+    opt.className = 'user-option' + (localStorage.getItem(KEY_USER) === name ? ' selected' : '');
+    opt.textContent = name;
+    opt.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setActiveUser(name);
+      closeUserDropdown();
+    });
+    dd.appendChild(opt);
+  });
+}
+
+function toggleUserDropdown() {
+  const dd = document.getElementById('user-dropdown');
+  dd.classList.toggle('open');
+  // Close on outside tap
+  if (dd.classList.contains('open')) {
+    setTimeout(() => {
+      document.addEventListener('click', closeUserDropdown, { once: true });
+    }, 50);
+  }
+}
+
+function closeUserDropdown() {
+  document.getElementById('user-dropdown').classList.remove('open');
+}
+
+function setActiveUser(name) {
+  localStorage.setItem(KEY_USER, name);
+  document.getElementById('hab-user-label').textContent = name;
+  document.getElementById('hab-user-btn').classList.add('selected');
+  // Update checkmarks in dropdown
+  document.querySelectorAll('.user-option').forEach(opt => {
+    opt.classList.toggle('selected', opt.textContent === name);
+  });
+  updateActionBar();
+}
+
+function getRoomsDone() {
+  try { return JSON.parse(localStorage.getItem(KEY_ROOMS_DONE) || '[]'); }
+  catch(e) { return []; }
+}
+
+function markRoomDone(roomId) {
+  const done = getRoomsDone();
+  if (!done.includes(roomId)) done.push(roomId);
+  localStorage.setItem(KEY_ROOMS_DONE, JSON.stringify(done));
+}
+
+function startCheck() {
+  const startBtn = document.getElementById('hab-start-btn');
+  if (startBtn.classList.contains('disabled')) {
+    if (!localStorage.getItem(KEY_URL)) showToast('Connect to Google Sheets first');
+    else if (!localStorage.getItem(KEY_USER)) showToast('Select a user first');
+    return;
+  }
+  if (localStorage.getItem(KEY_SWEEP) === 'true') {
+    // Already in progress — just remind
+    showToast('Check already in progress');
+    return;
+  }
+  // Confirm reset
+  if (!confirm('Start a new stock check? All quantities will reset to ? — your last inventory will show as a reference on each item.')) return;
+
+  // Save current state as "last" reference
+  localStorage.setItem(KEY_LAST, JSON.stringify(state));
+
+  // Reset all quantities to null (unchecked)
+  ALL_ITEMS.forEach(i => { state[i.id] = { qty: null, note: state[i.id]?.note || '' }; });
+  saveState();
+
+  // Mark sweep as active, clear rooms done
+  localStorage.setItem(KEY_SWEEP, 'true');
+  localStorage.setItem(KEY_ROOMS_DONE, '[]');
+  localStorage.setItem('last_check', Date.now());
+
+  renderHome();
+  updateActionBar();
+  showToast('✓ New check started — all items reset');
+}
+
+// ═══════════════════════════════════════════════════════════
 // SETTINGS
 // ═══════════════════════════════════════════════════════════
 function loadSettings() {
@@ -642,7 +899,10 @@ async function connectToSheet() {
     showConnStatus('ok', `✓ Connected — ${json.count} items loaded successfully.`);
     showToast('✓ Connected to Google Sheets!');
     setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
+    // Also fetch users now that we have a URL
+    await fetchUsersFromSheet(url);
     renderHome();
+    updateActionBar();
   } catch(e) {
     showConnStatus('err', 'Could not connect: ' + e.message + ' — Check URL is correct and deployed as Web App with access: Anyone');
     console.error('Connect error:', e);
@@ -682,7 +942,7 @@ function showView(id) {
   document.getElementById('view-'+id).classList.add('active');
   window.scrollTo(0,0);
 }
-function goHome() { clearSearch(); renderHome(); showView('home'); }
+function goHome() { clearSearch(); renderHome(); updateActionBar(); showView('home'); }
 
 // ═══════════════════════════════════════════════════════════
 // HOME
@@ -727,8 +987,13 @@ function renderHome() {
     let bClass='unchecked',bText=`${rt} items`;
     if(rc===rt&&rt>0){bClass=rn>0?'needs':'done';bText=rn>0?`${rn} needed`:'✓ Done';}
     else if(rc>0||mustUnc>0){bClass=rn>0?'needs':'unchecked';bText=rn>0?`${rn} needed`:`${rc}/${rt}`;}
+    const isDone = getRoomsDone().includes(room.id);
     const card=document.createElement('div');
     card.className='room-card';
+    // Show ✓ tick + checked/total when done
+    const doneStrip = isDone
+      ? `<div class="room-done-strip visible">✓ Done — ${rc} of ${rt} items checked · ${rn>0?rn+' needed':'all stocked'}</div>`
+      : '';
     card.innerHTML=`
       <div class="room-card-top">
         <div class="room-icon">${room.icon}</div>
@@ -738,7 +1003,8 @@ function renderHome() {
         </div>
         <div class="room-badge ${bClass}">${bText}</div>
       </div>
-      <div class="room-progress"><div class="room-progress-bar" style="width:${pct}%"></div></div>`;
+      <div class="room-progress"><div class="room-progress-bar" style="width:${pct}%"></div></div>
+      ${doneStrip}`;
     card.addEventListener('click',()=>openRoom(room.id));
     list.appendChild(card);
   });
@@ -870,9 +1136,21 @@ async function tryFinishRoom(){
     else if(item.must) needed++;
   }));
 
-  // Navigate home immediately — sync happens in background
-  showToast('Room saved ✓');
+  // Mark this room as done in this sweep
+  markRoomDone(currentRoomId);
+
+  // Check if ALL rooms are now done — if so, end the sweep
+  const done = getRoomsDone();
+  const allDone = ROOMS.length > 0 && done.length >= ROOMS.length;
+  if (allDone) {
+    localStorage.setItem(KEY_SWEEP, 'false');
+    showToast('✓ All rooms done! Sweep complete.');
+  } else {
+    showToast(`Room saved ✓ · ${done.length}/${ROOMS.length} rooms done`);
+  }
+
   goHome();
+  updateActionBar();
 
   // Sync to Sheet after navigation (non-blocking)
   syncToSheet().catch(()=>{});
@@ -892,6 +1170,30 @@ function buildClusterHTML(itemId,qty){
   </div>`;
 }
 
+function getLastQty(itemId) {
+  try {
+    const last = JSON.parse(localStorage.getItem(KEY_LAST) || '{}');
+    const s = last[itemId];
+    return (s && s.qty !== null && s.qty !== undefined) ? s.qty : null;
+  } catch(e) { return null; }
+}
+
+function useLast(itemId, e) {
+  if(e) e.stopPropagation();
+  const lastQty = getLastQty(itemId);
+  if (lastQty === null) return;
+  if (!state[itemId]) state[itemId] = {qty: null, note: ''};
+  state[itemId].qty = lastQty;
+  saveState();
+  // Re-render the card in place
+  const item = ITEM_MAP[itemId];
+  if (!item) return;
+  const oldCard = document.getElementById('card-'+itemId);
+  if (oldCard) oldCard.replaceWith(buildItemCard(item));
+  updateRoomProgressFromState();
+  updateDoneButton();
+}
+
 function buildItemCard(item){
   const s=state[item.id]||{qty:null,note:''};
   const qty=s.qty; const note=s.note||'';
@@ -908,6 +1210,16 @@ function buildItemCard(item){
   else if(!isChecked){sClass+='s-unchecked';sText='Not checked yet';}
   else if(isZero){sClass+='s-need';sText='Out of stock — add to shopping list';}
   else{sClass+='s-ok';sText=`✅ In stock (${qty})`;}
+
+  // Last entry reference
+  const lastQty = getLastQty(item.id);
+  const lastHtml = lastQty !== null
+    ? `<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+        <span class="last-entry">Last: ${lastQty}</span>
+        ${!isChecked ? `<button class="use-last-btn" onclick="useLast('${item.id}',event)">Use last</button>` : ''}
+       </div>`
+    : '';
+
   const card=document.createElement('div');
   card.className=cardClass; card.id='card-'+item.id;
   card.innerHTML=`
@@ -918,6 +1230,7 @@ function buildItemCard(item){
       </div>
       ${buildClusterHTML(item.id,qty)}
     </div>
+    ${lastHtml}
     <div class="item-note-row">
       <div class="note-tap ${note?'has-note':''}" id="notetap-${item.id}"
            onclick="openNoteModal('${item.id}','${item.name.replace(/'/g,"\\'")}')">
@@ -1031,11 +1344,20 @@ function renderShoppingList(){
     const hdr=document.createElement('div');
     hdr.style.cssText=`background:${bg};border-radius:${isOpen?'12px 12px 0 0':'12px'};padding:14px 16px;display:flex;align-items:center;gap:12px;border:1.5px solid ${border};cursor:pointer;transition:border-radius 0.2s;user-select:none;`;
     hdr.setAttribute('data-section',sectionId);
+    // Find unchecked rooms that have items in this store
+    const sweepOn = localStorage.getItem(KEY_SWEEP) === 'true';
+    const doneRooms = getRoomsDone();
+    const uncheckedRoomsForStore = sweepOn
+      ? ROOMS.filter(r => !doneRooms.includes(r.id) && items.some(i => i.roomId === r.id))
+            .map(r => r.name)
+      : [];
+
     hdr.innerHTML=`
       <span style="font-size:22px;">${icon}</span>
       <div style="flex:1">
         <div style="font-size:15px;font-weight:800;color:${color};">${key}</div>
         <div style="font-size:12px;color:var(--mid);font-weight:500;">${items.length} item${items.length!==1?'s':''} needed</div>
+        ${uncheckedRoomsForStore.length>0?`<div class="unchecked-rooms-badge">⚠️ ${uncheckedRoomsForStore.join(', ')} not yet checked</div>`:''}
       </div>
       ${items.filter(i=>i.must).length>0?`<div style="background:var(--amber-light);color:var(--amber);font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px;margin-right:6px;">★ ${items.filter(i=>i.must).length} must</div>`:''}
       <span id="chevron-${sectionId}" style="font-size:18px;color:${color};transition:transform 0.25s;display:inline-block;transform:rotate(${isOpen?'0':'180'}deg);">⌄</span>`;
