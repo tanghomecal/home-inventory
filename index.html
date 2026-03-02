@@ -81,6 +81,12 @@
   .last-entry{font-size:11px;color:#B8A89E;font-weight:600;font-family:var(--mono);background:var(--blush);padding:2px 8px;border-radius:10px;white-space:nowrap;}
   .use-last-btn{font-size:12px;font-weight:700;color:var(--sage-dark);background:var(--sage-light);border:1.5px solid var(--sage-mid);border-radius:8px;padding:5px 10px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
   .use-last-btn:active{background:var(--sage-mid);}
+  /* Last qty pill shown inline in item status line */
+  .last-qty-pill{display:inline-flex;align-items:center;gap:6px;background:var(--blush);border:1.5px solid var(--blush-mid);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;color:var(--charcoal-mid);cursor:pointer;transition:all 0.15s;margin-top:4px;}
+  .last-qty-pill:active{background:var(--sage-light);border-color:var(--sage-mid);color:var(--sage-dark);}
+  .last-qty-pill .pill-arrow{font-size:14px;color:var(--sage);}
+  .last-qty-pill .pill-label{color:var(--mid);font-weight:600;}
+  .last-qty-pill .pill-num{color:var(--charcoal);font-family:var(--mono);}
 
   /* room done overlay on card */
   .room-done-strip{display:none;margin-top:8px;padding:6px 12px;background:var(--sage-light);border-radius:8px;font-size:12px;font-weight:700;color:var(--sage-dark);text-align:center;}
@@ -718,6 +724,13 @@ function buildRoomsFromItems(items) {
 
   // Ensure state has entries for all items
   ALL_ITEMS.forEach(i => { if (!state[i.id]) state[i.id] = {qty:null, note:''}; });
+
+  // If KEY_LAST has never been set, seed it from current state
+  // so "Last: N" shows for items that were previously synced
+  if (!localStorage.getItem(KEY_LAST)) {
+    const hasData = ALL_ITEMS.some(i => (state[i.id]||{}).qty !== null);
+    if (hasData) localStorage.setItem(KEY_LAST, JSON.stringify(state));
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1211,14 +1224,23 @@ function buildItemCard(item){
   else if(isZero){sClass+='s-need';sText='Out of stock — add to shopping list';}
   else{sClass+='s-ok';sText=`✅ In stock (${qty})`;}
 
-  // Last entry reference
+  // Last entry reference — shown as tappable pill when item is unchecked
   const lastQty = getLastQty(item.id);
-  const lastHtml = lastQty !== null
-    ? `<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
-        <span class="last-entry">Last: ${lastQty}</span>
-        ${!isChecked ? `<button class="use-last-btn" onclick="useLast('${item.id}',event)">Use last</button>` : ''}
-       </div>`
-    : '';
+
+  // If unchecked and lastQty exists, show pill in status area: "↩ Use last: 3"
+  // If already checked, just show "Last: N" as a small reminder (no tap)
+  let lastHtml = '';
+  if (lastQty !== null) {
+    if (!isChecked) {
+      lastHtml = `<div class="last-qty-pill" onclick="useLast('${item.id}',event)" id="lastpill-${item.id}">
+        <span class="pill-arrow">↩</span>
+        <span class="pill-label">Use last:</span>
+        <span class="pill-num">${lastQty}</span>
+      </div>`;
+    } else {
+      lastHtml = `<span class="last-entry" style="margin-top:3px;display:inline-block;">Last: ${lastQty}</span>`;
+    }
+  }
 
   const card=document.createElement('div');
   card.className=cardClass; card.id='card-'+item.id;
@@ -1227,10 +1249,10 @@ function buildItemCard(item){
       <div class="item-name-wrap">
         <div class="item-name ${item.must?'must':''}">${item.name}</div>
         <div class="${sClass}">${sText}</div>
+        ${lastHtml}
       </div>
       ${buildClusterHTML(item.id,qty)}
     </div>
-    ${lastHtml}
     <div class="item-note-row">
       <div class="note-tap ${note?'has-note':''}" id="notetap-${item.id}"
            onclick="openNoteModal('${item.id}','${item.name.replace(/'/g,"\\'")}')">
@@ -1292,6 +1314,20 @@ function renderShoppingList(){
   const scroll=document.getElementById('shop-scroll');
   scroll.innerHTML='';
 
+  // Check if a sweep has ever been started
+  const sweepEverStarted = localStorage.getItem(KEY_SWEEP) !== null;
+  const anyChecked = ALL_ITEMS.some(i => (state[i.id]||{}).qty !== null);
+
+  if (!sweepEverStarted && !anyChecked) {
+    scroll.innerHTML=`<div class="empty-shop">
+      <div class="icon">📋</div>
+      <h3>No check done yet</h3>
+      <p>Tap <strong>Start Check</strong> on the home screen, go through the rooms, and the shopping list will appear here based on what's out of stock.</p>
+    </div>`;
+    document.getElementById('shop-sub-text').textContent='No sweep completed yet';
+    return;
+  }
+
   // Split need-items into 3 stores
   const lists = { Supermarket:[], Online:[], 'Wet Market':[] };
   ALL_ITEMS.forEach(item=>{
@@ -1312,7 +1348,7 @@ function renderShoppingList(){
   document.getElementById('shop-sub-text').textContent=`${totalNeed} items needed · ${totalMust} must-haves`;
 
   if(totalNeed===0){
-    scroll.innerHTML=`<div class="empty-shop"><div class="icon">✅</div><h3>All stocked up!</h3><p>Nothing needs buying right now.</p></div>`;
+    scroll.innerHTML=`<div class="empty-shop"><div class="icon">✅</div><h3>All stocked up!</h3><p>Nothing needs buying right now. All checked items are in stock.</p></div>`;
     return;
   }
 
