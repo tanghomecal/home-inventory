@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory</title>
+<title>Home Inventory v10</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -77,21 +77,35 @@
   .user-option:active,.user-option:hover{background:var(--blush);}
   .user-option.selected{color:var(--sage-dark);font-weight:800;}
 
-  /* last entry display on item card */
-  .last-entry{font-size:11px;color:#B8A89E;font-weight:600;font-family:var(--mono);background:var(--blush);padding:2px 8px;border-radius:10px;white-space:nowrap;}
-  .use-last-btn{font-size:12px;font-weight:700;color:var(--sage-dark);background:var(--sage-light);border:1.5px solid var(--sage-mid);border-radius:8px;padding:5px 10px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+  /* ── ITEM CARD ACTION COLUMN ── */
+  .card-actions{display:flex;flex-direction:column;align-items:stretch;gap:7px;flex-shrink:0;width:116px;}
+  /* +/- cluster */
+  .qty-cluster{display:flex;align-items:stretch;border-radius:10px;overflow:hidden;border:2.5px solid var(--blush-mid);width:100%;}
+  .item-card.is-zero .qty-cluster{border-color:var(--terra-mid);}
+  .item-card.is-ok .qty-cluster{border-color:var(--sage-mid);}
+  .item-card.must-unchecked .qty-cluster{border-color:#E8A030;}
+  .qbtn{flex:1;height:54px;border:none;background:var(--blush);color:var(--charcoal);font-size:30px;font-weight:300;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:var(--font);transition:background 0.1s;}
+  .qbtn:active{background:var(--blush-mid);}
+  .qbtn.plus{background:var(--sage);color:white;}
+  .qbtn.plus:active{background:var(--sage-dark);}
+  .qnum{flex:1;height:54px;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;font-family:var(--mono);color:var(--charcoal);background:var(--white);border-left:1px solid var(--blush-mid);border-right:1px solid var(--blush-mid);}
+  .qnum.zero{color:var(--terra);background:var(--terra-light);}
+  .qnum.positive{color:var(--sage-dark);}
+  .qnum.unchecked{color:#D0C0B8;font-size:18px;font-weight:500;}
+  /* Use Last */
+  .use-last-btn{width:100%;border:2px solid var(--sage-mid);border-radius:10px;background:var(--sage-light);color:var(--sage-dark);font-family:var(--font);font-size:12px;font-weight:800;padding:9px 4px;cursor:pointer;text-align:center;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:4px;box-sizing:border-box;}
   .use-last-btn:active{background:var(--sage-mid);}
-  /* Last qty pill shown inline in item status line */
-  .last-qty-pill{display:inline-flex;align-items:center;gap:6px;background:var(--blush);border:1.5px solid var(--blush-mid);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;color:var(--charcoal-mid);cursor:pointer;transition:all 0.15s;margin-top:4px;}
-  .last-qty-pill:active{background:var(--sage-light);border-color:var(--sage-mid);color:var(--sage-dark);}
-  .last-qty-pill .pill-arrow{font-size:14px;color:var(--sage);}
-  .last-qty-pill .pill-label{color:var(--mid);font-weight:600;}
-  .last-qty-pill .pill-num{color:var(--charcoal);font-family:var(--mono);}
-  .uncheck-btn{font-size:11px;font-weight:700;color:var(--mid);background:var(--blush);border:1.5px solid var(--blush-mid);border-radius:8px;padding:4px 9px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all 0.15s;}
-  .uncheck-btn:active{background:var(--terra-light);color:var(--terra);border-color:var(--terra-mid);}
-  .push-buy-btn{font-size:11px;font-weight:700;color:var(--blue);background:var(--blueLt,#E8F0FE);border:1.5px solid #AABFEE;border-radius:8px;padding:4px 9px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all 0.15s;}
+  .use-last-btn .usl-arrow{font-size:14px;}
+  .use-last-btn .usl-num{font-family:var(--mono);font-size:15px;font-weight:800;}
+  /* Push to buy */
+  .push-buy-btn{width:100%;border:2px solid #AABFEE;border-radius:10px;background:#E8F0FE;color:#1A56BB;font-family:var(--font);font-size:12px;font-weight:800;padding:9px 4px;cursor:pointer;text-align:center;transition:all 0.15s;box-sizing:border-box;}
   .push-buy-btn:active{background:#C5D5F8;}
-  .push-buy-btn.on-list{color:var(--sage-dark);background:var(--sage-light);border-color:var(--sage-mid);}
+  .push-buy-btn.on-list{background:var(--sage-light);border-color:var(--sage-mid);color:var(--sage-dark);}
+  /* Uncheck — small secondary */
+  .uncheck-btn{width:100%;border:1.5px solid var(--blush-mid);border-radius:8px;background:var(--blush);color:var(--mid);font-family:var(--font);font-size:11px;font-weight:700;padding:5px 4px;cursor:pointer;text-align:center;transition:all 0.15s;box-sizing:border-box;}
+  .uncheck-btn:active{background:var(--terra-light);color:var(--terra);border-color:var(--terra-mid);}
+  /* Last reminder badge */
+  .last-entry{font-size:11px;color:#B8A89E;font-weight:600;font-family:var(--mono);background:var(--blush);padding:2px 8px;border-radius:10px;white-space:nowrap;}
 
   /* room done overlay on card */
   .room-done-strip{display:none;margin-top:8px;padding:6px 12px;background:var(--sage-light);border-radius:8px;font-size:12px;font-weight:700;color:var(--sage-dark);text-align:center;}
@@ -209,18 +223,7 @@
   .item-status.s-unchecked{color:var(--mid);font-weight:500;}
   .item-status.s-must-unchecked{color:var(--amber);}
 
-  .qty-cluster{display:flex;align-items:stretch;border-radius:var(--radius-sm);overflow:hidden;border:2px solid var(--blush-mid);flex-shrink:0;}
-  .item-card.is-zero .qty-cluster{border-color:var(--terra-mid);}
-  .item-card.is-ok .qty-cluster{border-color:var(--sage-mid);}
-  .item-card.must-unchecked .qty-cluster{border-color:#E8A030;}
-  .qbtn{width:46px;height:46px;border:none;background:var(--blush);color:var(--charcoal);font-size:24px;font-weight:300;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:var(--font);transition:background 0.1s;flex-shrink:0;}
-  .qbtn:active{background:var(--blush-mid);}
-  .qbtn.plus{background:var(--sage);color:white;}
-  .qbtn.plus:active{background:var(--sage-dark);}
-  .qnum{width:46px;height:46px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;font-family:var(--mono);color:var(--charcoal);background:var(--white);border-left:1px solid var(--blush-mid);border-right:1px solid var(--blush-mid);}
-  .qnum.zero{color:var(--terra);background:var(--terra-light);}
-  .qnum.positive{color:var(--sage-dark);}
-  .qnum.unchecked{color:#D0C0B8;font-size:14px;font-weight:500;}
+  /* qty-cluster styles moved to card-actions block above */
 
   .item-note-row{margin-top:10px;}
   .note-tap{font-size:13px;color:#C0B0A8;cursor:pointer;padding:7px 12px;border:1.5px dashed var(--blush-mid);border-radius:8px;display:inline-block;font-weight:500;transition:all 0.15s;}
@@ -266,6 +269,24 @@
   .shop-item.checked-item .shop-item-name{text-decoration:line-through;color:var(--mid);}
   .shop-note-text{font-size:12px;color:var(--amber);font-style:italic;display:block;margin-top:3px;font-weight:500;}
   .empty-shop{text-align:center;padding:60px 24px;}
+  /* ── SHOPPING LIST QTY TABLE ── */
+  .shop-qty-table{display:flex;gap:6px;margin-top:10px;}
+  .sqt-cell{flex:1;display:flex;flex-direction:column;align-items:center;background:var(--rose-white);border:1.5px solid var(--blush-mid);border-radius:10px;padding:7px 6px 6px;min-width:0;}
+  .sqt-cell.cell-last{background:var(--blush);border-color:var(--blush-mid);}
+  .sqt-cell.cell-inv.zero{background:var(--red-light);border-color:var(--red-mid);}
+  .sqt-cell.cell-inv.low{background:var(--amber-light);border-color:var(--amber-mid);}
+  .sqt-cell.cell-inv.ok{background:var(--sage-light);border-color:var(--sage-mid);}
+  .sqt-cell.cell-buy{background:white;border-color:var(--blush-mid);}
+  .sqt-cell.cell-buy.has-val{background:var(--sage-light);border-color:var(--sage-mid);}
+  .sqt-label{font-size:9px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--mid);margin-bottom:4px;text-align:center;}
+  .sqt-num{font-size:22px;font-weight:800;font-family:var(--mono);color:var(--charcoal);line-height:1;}
+  .sqt-cell.cell-inv.zero .sqt-num{color:var(--red);}
+  .sqt-cell.cell-inv.low .sqt-num{color:var(--amber);}
+  .sqt-cell.cell-inv.ok .sqt-num{color:var(--sage-dark);}
+  .sqt-cell.cell-buy .sqt-num{color:var(--charcoal-mid);}
+  .sqt-cell.cell-buy.has-val .sqt-num{color:var(--sage-dark);}
+  .sqt-input{width:100%;border:none;background:transparent;font-family:var(--mono);font-size:22px;font-weight:800;color:var(--charcoal-mid);text-align:center;outline:none;padding:0;}
+  .sqt-input:focus{color:var(--sage-dark);}
   .empty-shop .icon{font-size:56px;margin-bottom:16px;}
   .empty-shop h3{font-size:22px;font-weight:800;color:var(--charcoal);margin-bottom:8px;}
   .empty-shop p{font-size:15px;line-height:1.6;color:var(--mid);font-weight:500;}
@@ -274,6 +295,33 @@
   .share-btn{flex:1;background:linear-gradient(135deg,var(--sage),var(--sage-dark));color:white;border:none;border-radius:var(--radius);padding:16px;font-family:var(--font);font-size:16px;font-weight:800;cursor:pointer;}
 
   /* Toast */
+  /* ── SWEEP RESUME BANNER ── */
+  .sweep-resume-banner{margin:10px 14px 0;background:var(--charcoal);border-radius:var(--radius-sm);padding:14px 16px;display:none;}
+  .sweep-resume-banner.visible{display:block;}
+  .srb-title{font-size:13px;font-weight:800;color:#CCC;margin-bottom:4px;}
+  .srb-sub{font-size:12px;color:#888;margin-bottom:10px;}
+  .srb-btns{display:flex;gap:8px;}
+  .srb-resume{flex:1;padding:11px;border:none;border-radius:var(--radius-sm);background:var(--sage);color:white;font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;}
+  .srb-fresh{flex:1;padding:11px;border:2px solid #555;border-radius:var(--radius-sm);background:transparent;color:#CCC;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;}
+
+  /* ── STORE PICKER MODAL ── */
+  .store-picker-overlay{display:none;position:fixed;inset:0;background:rgba(45,45,45,0.6);z-index:998;align-items:flex-end;}
+  .store-picker-overlay.active{display:flex;}
+  .store-picker-sheet{background:var(--white);width:100%;border-radius:24px 24px 0 0;padding:22px 20px 44px;animation:slideUp 0.25s ease;}
+  .store-picker-title{font-size:20px;font-weight:800;color:var(--charcoal);margin-bottom:4px;}
+  .store-picker-sub{font-size:13px;color:var(--mid);margin-bottom:18px;font-weight:500;}
+  .store-option{display:flex;align-items:center;gap:14px;padding:14px 16px;border:2px solid var(--blush-mid);border-radius:var(--radius-sm);margin-bottom:10px;cursor:pointer;transition:all 0.15s;user-select:none;}
+  .store-option.selected{border-color:var(--sage);background:var(--sage-light);}
+  .store-option:active{background:var(--blush);}
+  .store-option-icon{font-size:26px;flex-shrink:0;}
+  .store-option-label{flex:1;font-size:16px;font-weight:700;color:var(--charcoal);}
+  .store-option-check{width:24px;height:24px;border:2px solid var(--blush-mid);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.15s;}
+  .store-option.selected .store-option-check{background:var(--sage);border-color:var(--sage);}
+  .store-option.selected .store-option-check::after{content:'✓';color:white;font-size:14px;font-weight:800;}
+  .store-picker-confirm{width:100%;margin-top:14px;border:none;border-radius:var(--radius);padding:18px;font-family:var(--font);font-size:17px;font-weight:800;cursor:pointer;background:linear-gradient(135deg,var(--sage),var(--sage-dark));color:white;box-shadow:0 6px 20px rgba(90,122,108,0.3);}
+  .store-picker-confirm:active{transform:scale(0.98);}
+  .store-picker-confirm.disabled{background:var(--blush-mid);color:var(--mid);box-shadow:none;cursor:not-allowed;}
+
   .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--charcoal);color:white;padding:12px 22px;border-radius:24px;font-size:14px;font-weight:700;z-index:9999;opacity:0;transition:opacity 0.25s;white-space:nowrap;pointer-events:none;}
   .toast.show{opacity:1;}
   @keyframes shake{0%,100%{transform:translateX(0);}20%{transform:translateX(-6px);}40%{transform:translateX(6px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}}
@@ -321,6 +369,16 @@
     </div>
   </div>
   <div id="search-results"></div>
+  <!-- Sweep resume/fresh banner — shown when sweep is in progress -->
+  <div class="sweep-resume-banner" id="sweep-resume-banner">
+    <div class="srb-title" id="srb-title">Sweep in progress</div>
+    <div class="srb-sub" id="srb-sub">Tap Resume to continue or Start Fresh to reset.</div>
+    <div class="srb-btns">
+      <button class="srb-resume" onclick="resumeSweep()">▶ Resume</button>
+      <button class="srb-fresh" onclick="triggerStartFresh()">↺ Start Fresh</button>
+    </div>
+  </div>
+
   <div id="home-main">
     <div id="loading-banner" class="loading-banner">
       <div class="spinner"></div>
@@ -429,6 +487,33 @@
   </div>
 </div>
 
+<!-- Store Picker Modal -->
+<div class="store-picker-overlay" id="store-picker-overlay">
+  <div class="store-picker-sheet">
+    <div class="modal-handle"></div>
+    <div class="store-picker-title" id="store-picker-title">Which stores are you shopping for?</div>
+    <div class="store-picker-sub">Only ★ mandatory items for these stores will be required before marking a room Done.</div>
+    <div id="store-options">
+      <div class="store-option" data-store="Supermarket" onclick="toggleStoreOption(this)">
+        <span class="store-option-icon">🛒</span>
+        <span class="store-option-label">Supermarket</span>
+        <span class="store-option-check"></span>
+      </div>
+      <div class="store-option" data-store="Wet Market" onclick="toggleStoreOption(this)">
+        <span class="store-option-icon">🥬</span>
+        <span class="store-option-label">Wet Market</span>
+        <span class="store-option-check"></span>
+      </div>
+      <div class="store-option" data-store="Online" onclick="toggleStoreOption(this)">
+        <span class="store-option-icon">💻</span>
+        <span class="store-option-label">Online</span>
+        <span class="store-option-check"></span>
+      </div>
+    </div>
+    <button class="store-picker-confirm disabled" id="store-picker-confirm" onclick="confirmStoreSelection()">Start Check →</button>
+  </div>
+</div>
+
 <!-- Note Modal -->
 <div class="modal-overlay" id="note-modal">
   <div class="modal-sheet">
@@ -456,8 +541,12 @@ const KEY_USER     = 'inv_userName';
 const KEY_PENDING  = 'inv_pendingSync';
 const KEY_LAST     = 'inv_lastState_v4';   // snapshot of state at end of last sweep
 const KEY_SWEEP    = 'inv_sweepActive';    // 'true' when a check is in progress
-const KEY_ROOMS_DONE = 'inv_roomsDone';   // JSON array of roomIds completed this sweep
+const KEY_ROOMS_DONE  = 'inv_roomsDone';   // JSON array of roomIds completed this sweep
+const KEY_SWEEP_SCOPE = 'inv_sweepScope';   // JSON array of stores selected for this sweep e.g. ['Supermarket','Wet Market']
+const KEY_SWEEP_START = 'inv_sweepStart';   // timestamp when current sweep started
 const KEY_USERS    = 'inv_users';         // cached user list from Sheet
+const KEY_LAST_SYNC = 'inv_lastSync';      // timestamp of last successful sync
+const KEY_BUY_QTYS  = 'inv_buyQtys';       // {itemId: buyQty} set by shopping list user
 
 // Item data — loaded from Google Sheets (no hardcoded items)
 let ROOMS     = [];
@@ -469,6 +558,7 @@ let state = {};
 
 // Current sweep tracking
 let USERS_LIST      = ['Maricor', 'Rechel'];  // default, overridden from Sheet
+let buyQtysCache    = {};  // buy qtys loaded from Sheet when shopping list opens
 
 // ═══════════════════════════════════════════════════════════
 // BOOT
@@ -591,6 +681,7 @@ async function fetchItemsFromSheet(url, silent=false) {
     localStorage.setItem(KEY_ITEMS, JSON.stringify(json.items));
     buildRoomsFromItems(json.items);
     renderHome();
+    localStorage.setItem(KEY_LAST_SYNC, Date.now());
     setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
     hideLoadingBanner();
     updateActionBar();
@@ -632,6 +723,7 @@ async function syncToSheet() {
     const json = await androidSafePost(url, payload);
     if (json.error) throw new Error(json.error);
     localStorage.removeItem(KEY_PENDING);
+    localStorage.setItem(KEY_LAST_SYNC, Date.now());
     setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
     // Snapshot state as "last" after every successful sync
     // so "Last: N" is always up to date
@@ -645,10 +737,11 @@ async function syncToSheet() {
   }
 }
 
-async function logSweepHistory(roomNames, checked, needed) {
+async function logSweepHistory(roomNames, checked, needed, status) {
   const url = localStorage.getItem(KEY_URL);
   if (!url) return;
   const now = new Date();
+  const scope = getSweepScope();
   try {
     await androidSafePost(url, {
       action:       'history',
@@ -658,6 +751,8 @@ async function logSweepHistory(roomNames, checked, needed) {
       rooms:        roomNames,
       itemsChecked: checked,
       itemsNeeded:  needed,
+      status:       status || 'Complete',
+      scope:        scope.join(', ') || 'All',
     });
   } catch(e) { console.warn('logHistory:', e); }
 }
@@ -757,12 +852,20 @@ function updateActionBar() {
   const hasItems   = ALL_ITEMS.length > 0;
   const sweepActive = localStorage.getItem(KEY_SWEEP) === 'true';
 
-  // Connect button
+  // Connect button — green if URL saved, with last-synced time
   const connectBtn   = document.getElementById('hab-connect-btn');
   const connectLabel = document.getElementById('hab-connect-label');
+  const lastSyncTs   = localStorage.getItem(KEY_LAST_SYNC);
   if (url && hasItems) {
     connectBtn.classList.add('connected');
-    connectLabel.textContent = '✓ Connected';
+    if (lastSyncTs) {
+      const d = new Date(parseInt(lastSyncTs));
+      const syncStr = d.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'});
+      const today = new Date().toDateString() === d.toDateString();
+      connectLabel.textContent = '✓ ' + (today ? syncStr : d.toLocaleDateString('en-AU',{day:'numeric',month:'short'}));
+    } else {
+      connectLabel.textContent = '✓ Saved';
+    }
   } else {
     connectBtn.classList.remove('connected');
     connectLabel.textContent = 'Connect';
@@ -781,10 +884,13 @@ function updateActionBar() {
 
   // Start Check button — enabled only when connected + user selected
   const startBtn = document.getElementById('hab-start-btn');
+  const startLabel = startBtn.querySelector('.hab-label');
   if (url && hasItems && user) {
     startBtn.classList.remove('disabled');
+    startLabel.textContent = sweepActive ? 'Restart' : 'Start Check';
   } else {
     startBtn.classList.add('disabled');
+    startLabel.textContent = 'Start Check';
   }
 
   // Hero subtitle
@@ -864,6 +970,13 @@ function markRoomDone(roomId) {
   localStorage.setItem(KEY_ROOMS_DONE, JSON.stringify(done));
 }
 
+// ── SWEEP MANAGEMENT ────────────────────────────────────────
+
+function getSweepScope() {
+  try { return JSON.parse(localStorage.getItem(KEY_SWEEP_SCOPE) || '[]'); }
+  catch(e) { return []; }
+}
+
 function startCheck() {
   const startBtn = document.getElementById('hab-start-btn');
   if (startBtn.classList.contains('disabled')) {
@@ -871,33 +984,117 @@ function startCheck() {
     else if (!localStorage.getItem(KEY_USER)) showToast('Select a user first');
     return;
   }
-  if (localStorage.getItem(KEY_SWEEP) === 'true') {
-    // Already in progress — just remind
-    showToast('Check already in progress');
-    return;
-  }
-  // Confirm reset
-  if (!confirm('Start a new stock check? All quantities will reset to ? — your last inventory will show as a reference on each item.')) return;
+  // If sweep already active, open store picker in "restart" mode
+  const sweepActive = localStorage.getItem(KEY_SWEEP) === 'true';
+  openStorePicker(sweepActive ? 'restart' : 'new');
+}
 
-  // Save current state as "last" reference — only if it has real data
-  // (don't overwrite a good snapshot with all-nulls)
+function openStorePicker(mode) {
+  // Pre-select previously used stores if resuming scope
+  const prevScope = getSweepScope();
+  document.querySelectorAll('.store-option').forEach(opt => {
+    const store = opt.getAttribute('data-store');
+    if (prevScope.includes(store)) opt.classList.add('selected');
+    else opt.classList.remove('selected');
+  });
+  // Update title
+  const title = document.getElementById('store-picker-title');
+  title.textContent = mode === 'restart'
+    ? 'Start Fresh — which stores this time?'
+    : 'Which stores are you shopping for?';
+  document.getElementById('store-picker-overlay').dataset.mode = mode;
+  updateStorePickerConfirm();
+  document.getElementById('store-picker-overlay').classList.add('active');
+}
+
+function toggleStoreOption(el) {
+  el.classList.toggle('selected');
+  updateStorePickerConfirm();
+}
+
+function updateStorePickerConfirm() {
+  const anySelected = document.querySelectorAll('.store-option.selected').length > 0;
+  const btn = document.getElementById('store-picker-confirm');
+  btn.classList.toggle('disabled', !anySelected);
+}
+
+function closeStorePicker() {
+  document.getElementById('store-picker-overlay').classList.remove('active');
+}
+
+async function confirmStoreSelection() {
+  const btn = document.getElementById('store-picker-confirm');
+  if (btn.classList.contains('disabled')) return;
+
+  const selected = [...document.querySelectorAll('.store-option.selected')]
+    .map(el => el.getAttribute('data-store'));
+  const mode = document.getElementById('store-picker-overlay').dataset.mode;
+
+  closeStorePicker();
+
+  if (mode === 'restart') {
+    await doStartFresh(selected);
+  } else {
+    doBeginSweep(selected);
+  }
+}
+
+function doBeginSweep(scope) {
+  // Save current state as last reference if it has real data
   const hasRealData = ALL_ITEMS.some(i => (state[i.id]||{}).qty !== null);
-  if (hasRealData) {
-    localStorage.setItem(KEY_LAST, JSON.stringify(state));
-  }
+  if (hasRealData) localStorage.setItem(KEY_LAST, JSON.stringify(state));
 
-  // Reset all quantities to null (unchecked)
+  // Reset all quantities to null
   ALL_ITEMS.forEach(i => { state[i.id] = { qty: null, note: state[i.id]?.note || '' }; });
   saveState();
 
-  // Mark sweep as active, clear rooms done
   localStorage.setItem(KEY_SWEEP, 'true');
+  localStorage.setItem(KEY_SWEEP_SCOPE, JSON.stringify(scope));
+  localStorage.setItem(KEY_SWEEP_START, Date.now());
   localStorage.setItem(KEY_ROOMS_DONE, '[]');
   localStorage.setItem('last_check', Date.now());
 
   renderHome();
   updateActionBar();
-  showToast('✓ New check started — all items reset');
+  showToast('✓ New check started · ' + scope.join(', '));
+}
+
+async function doStartFresh(newScope) {
+  const user = localStorage.getItem(KEY_USER) || 'Helper';
+  const doneRooms = getRoomsDone();
+  const startTs = localStorage.getItem(KEY_SWEEP_START);
+  const startDate = startTs ? new Date(parseInt(startTs)).toLocaleDateString('en-AU') : '—';
+
+  showToast('Saving completed rooms…');
+
+  // 1. Sync whatever rooms were already done
+  try { await syncToSheet(); } catch(e) { console.warn('startFresh sync:', e); }
+
+  // 2. Log abandoned sweep to history
+  let checkedCount = 0, neededCount = 0;
+  ALL_ITEMS.forEach(i => {
+    const s = state[i.id]||{};
+    if(s.qty!==null){ checkedCount++; if(s.qty<1) neededCount++; }
+  });
+  try {
+    await logSweepHistory(
+      doneRooms.map(id => { const r=ROOMS.find(r=>r.id===id); return r?r.name:id; }),
+      checkedCount, neededCount, 'Abandoned'
+    );
+  } catch(e) { console.warn('startFresh history:', e); }
+
+  // 3. Begin fresh sweep
+  doBeginSweep(newScope);
+}
+
+function resumeSweep() {
+  // Hide banner, user just continues — no state change needed
+  document.getElementById('sweep-resume-banner').classList.remove('visible');
+  showToast('Resuming sweep');
+}
+
+function triggerStartFresh() {
+  openStorePicker('restart');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -987,6 +1184,25 @@ function updateStats() {
 
 function renderHome() {
   if (ROOMS.length === 0) { showSetupPrompt(); updateStats(); return; }
+
+  // Show resume banner if sweep is in progress
+  const sweepBanner = document.getElementById('sweep-resume-banner');
+  const sweepActive = localStorage.getItem(KEY_SWEEP) === 'true';
+  if (sweepActive) {
+    const doneRooms = getRoomsDone();
+    const startTs = localStorage.getItem(KEY_SWEEP_START);
+    const scope = getSweepScope();
+    const startStr = startTs
+      ? new Date(parseInt(startTs)).toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
+      : 'earlier';
+    document.getElementById('srb-title').textContent =
+      `Sweep in progress · ${doneRooms.length}/${ROOMS.length} rooms done`;
+    document.getElementById('srb-sub').textContent =
+      `Started ${startStr} · Scope: ${scope.length?scope.join(', '):'All stores'}`;
+    sweepBanner.classList.add('visible');
+  } else {
+    sweepBanner.classList.remove('visible');
+  }
   let total=0,checked=0,need=0;
   ALL_ITEMS.forEach(item=>{
     total++;
@@ -1007,13 +1223,20 @@ function renderHome() {
   const list=document.getElementById('room-list');
   list.innerHTML='';
 
+  // Scope — only count ★ mandatory items that belong to the active sweep's stores
+  const homeScope = getSweepScope();
+  const sweepActiveNow = localStorage.getItem(KEY_SWEEP) === 'true';
+
   ROOMS.forEach(room=>{
     let rt=0,rc=0,rn=0,mustUnc=0;
     Object.values(room.subcats).forEach(items=>items.forEach(item=>{
       rt++;
       const s=state[item.id];
       if(s&&s.qty!==null){rc++;if(s.qty<1)rn++;}
-      else if(item.must){rn++;mustUnc++;}
+      else if(item.must){rn++;}
+      // mustUnc only counts ★ items in scope — so the warning is relevant to this sweep
+      const inScope = !sweepActiveNow || homeScope.length===0 || homeScope.includes(item.store||'Supermarket');
+      if(item.must && inScope && !(s&&s.qty!==null)) mustUnc++;
     }));
     const pct=rt>0?Math.round(rc/rt*100):0;
     let bClass='unchecked',bText=`${rt} items`;
@@ -1022,7 +1245,10 @@ function renderHome() {
     const isDone = getRoomsDone().includes(room.id);
     const card=document.createElement('div');
     card.className='room-card';
-    // Show ✓ tick + checked/total when done
+    // Scope label suffix — e.g. "⚠️ 2 ★ unchecked (Supermarket)"
+    const scopeSuffix = mustUnc>0 && sweepActiveNow && homeScope.length>0
+      ? ` (${homeScope.join('+')})`
+      : '';
     const doneStrip = isDone
       ? `<div class="room-done-strip visible">✓ Done — ${rc} of ${rt} items checked · ${rn>0?rn+' needed':'all stocked'}</div>`
       : '';
@@ -1031,7 +1257,7 @@ function renderHome() {
         <div class="room-icon">${room.icon}</div>
         <div class="room-info">
           <div class="room-name">${room.name}</div>
-          <div class="room-meta">${rt} items · ${pct}% checked${mustUnc>0?' · ⚠️ '+mustUnc+' ★ unchecked':''}</div>
+          <div class="room-meta">${rt} items · ${pct}% checked${mustUnc>0?` · ⚠️ ${mustUnc} ★ unchecked${scopeSuffix}`:''}</div>
         </div>
         <div class="room-badge ${bClass}">${bText}</div>
       </div>
@@ -1094,22 +1320,38 @@ function renderRoomItems(room){
   updateRoomProgress(checked,total);
   Object.entries(room.subcats).forEach(([subcatName,items])=>{
     const subcatId='subcat-'+subcatName.replace(/[^a-z0-9]/gi,'_');
-    const allDone=items.every(i=>(state[i.id]||{}).qty!==null);
-    const isOpen=!allDone;
     const checkedCount=items.filter(i=>(state[i.id]||{}).qty!==null).length;
+    // Scope — only flag ★ items relevant to the active sweep's stores
+    const subcatScope = getSweepScope();
+    const subcatSweepOn = localStorage.getItem(KEY_SWEEP) === 'true';
+    const scopedMust = items.filter(i => {
+      if (!i.must) return false;
+      if (!subcatSweepOn || subcatScope.length === 0) return true;
+      return subcatScope.includes(i.store || 'Supermarket');
+    });
+    const mustCount = scopedMust.length;
+    const mustUnchecked = scopedMust.filter(i => (state[i.id]||{}).qty === null).length;
+    // Always start collapsed — user taps to expand
+    const isOpen=false;
 
     const div=document.createElement('div');
     div.className='subcat-divider';
+    const scopeTag = mustUnchecked > 0 && subcatSweepOn && subcatScope.length > 0
+      ? ` <span style="font-size:9px;opacity:0.7;">(${subcatScope.join('+')})</span>` : '';
+    const mustBadge=mustCount>0
+      ? `<span style="background:${mustUnchecked>0?'var(--amber-light)':'var(--sage-light)'};color:${mustUnchecked>0?'var(--amber)':'var(--sage-dark)'};font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;">★ ${mustUnchecked>0?mustUnchecked+' must left'+scopeTag:'must ✓'}</span>`
+      : '';
     div.innerHTML=`
       <div class="subcat-divider-text">${subcatName}</div>
+      ${mustBadge}
       <div class="subcat-divider-count">${checkedCount}/${items.length}</div>
-      <span class="subcat-chevron" id="chevron-${subcatId}" style="transform:rotate(${isOpen?'0':'180deg'})">⌄</span>`;
+      <span class="subcat-chevron" id="chevron-${subcatId}" style="transform:rotate(180deg)">⌄</span>`;
     scroll.appendChild(div);
 
     const wrap=document.createElement('div');
     wrap.className='subcat-items-wrap subcat-body';
     wrap.id=subcatId;
-    wrap.style.maxHeight=isOpen?'9999px':'0';
+    wrap.style.maxHeight='0';
     items.forEach(item=>wrap.appendChild(buildItemCard(item)));
     scroll.appendChild(wrap);
 
@@ -1142,8 +1384,14 @@ function updateRoomProgressFromState(){
 function getUncheckedMustItems(){
   const room=ROOMS.find(r=>r.id===currentRoomId);
   if(!room) return [];
+  const scope = getSweepScope(); // e.g. ['Supermarket','Wet Market']
   const unc=[];
-  Object.values(room.subcats).forEach(items=>items.forEach(item=>{if(item.must&&(state[item.id]||{}).qty===null)unc.push(item);}));
+  Object.values(room.subcats).forEach(items=>items.forEach(item=>{
+    // Only gate on ★ items that belong to a store in scope
+    // If no scope set (legacy), gate on all ★ items
+    const inScope = scope.length===0 || scope.includes(item.store||'Supermarket');
+    if(item.must && inScope && (state[item.id]||{}).qty===null) unc.push(item);
+  }));
   return unc;
 }
 
@@ -1283,26 +1531,39 @@ function buildItemCard(item){
   }
 
   const isForceBuy = !!(s.forceBuy);
-  const uncheckHtml = isChecked
+
+  // ── Build action column buttons ──
+  const useLastHtml = lastQty !== null
+    ? `<button class="use-last-btn" onclick="useLast('${item.id}',event)">
+         <span class="usl-arrow">↩</span>
+         <span>Use Last</span>
+         <span class="usl-num">${lastQty}</span>
+       </button>`
+    : '';
+  const pushBuyHtml2 = isForceBuy
+    ? `<button class="push-buy-btn on-list" onclick="pushToBuy('${item.id}',event)">🛒 On list</button>`
+    : `<button class="push-buy-btn" onclick="pushToBuy('${item.id}',event)">🛒 Push to buy</button>`;
+  const uncheckHtml2 = isChecked
     ? `<button class="uncheck-btn" onclick="uncheckItem('${item.id}',event)">✕ Uncheck</button>`
     : '';
-  const pushBuyHtml = isChecked
-    ? `<button class="push-buy-btn${isForceBuy?' on-list':''}" onclick="pushToBuy('${item.id}',event)">${isForceBuy?'🛒 On list':'🛒 Push to buy'}</button>`
+  const lastReminder = (isChecked && lastQty !== null)
+    ? `<span class="last-entry">Last: ${lastQty}</span>`
     : '';
 
   const card=document.createElement('div');
   card.className=cardClass+(isForceBuy?' is-zero':''); card.id='card-'+item.id;
   card.innerHTML=`
-    <div class="item-row">
-      <div class="item-name-wrap">
-        <div class="item-name ${item.must?'must':''}">${item.name}${isForceBuy?' <span style="font-size:11px;color:var(--blue);font-weight:700;">🛒 forced</span>':''}</div>
+    <div class="item-row" style="align-items:flex-start;gap:12px;">
+      <div class="item-name-wrap" style="flex:1;min-width:0;">
+        <div class="item-name ${item.must?'must':''}">${item.name}${isForceBuy?' <span style="font-size:11px;color:#1A56BB;font-weight:700;">🛒</span>':''}</div>
         <div class="${sClass}">${sText}</div>
-        ${lastHtml}
+        ${lastReminder}
       </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+      <div class="card-actions">
         ${buildClusterHTML(item.id,qty)}
-        ${uncheckHtml}
-        ${pushBuyHtml}
+        ${useLastHtml}
+        ${pushBuyHtml2}
+        ${uncheckHtml2}
       </div>
     </div>
     <div class="item-note-row">
@@ -1317,12 +1578,9 @@ function buildItemCard(item){
 function pushToBuy(itemId, e) {
   if(e) e.stopPropagation();
   if(!state[itemId]) state[itemId]={qty:null,note:''};
-  // Must have a qty entered first
+  // If unchecked, force qty to 0 so it registers as a checked item on the list
   if(state[itemId].qty===null){
-    showToast('Enter a quantity first before pushing to buy');
-    const card=document.getElementById('card-'+itemId);
-    if(card){card.classList.add('shake');setTimeout(()=>card.classList.remove('shake'),400);}
-    return;
+    state[itemId].qty=0;
   }
   state[itemId].forceBuy = !state[itemId].forceBuy;
   saveState();
@@ -1330,6 +1588,8 @@ function pushToBuy(itemId, e) {
   if(!item) return;
   const oldCard=document.getElementById('card-'+itemId);
   if(oldCard) oldCard.replaceWith(buildItemCard(item));
+  updateRoomProgressFromState();
+  updateDoneButton();
 }
 
 function uncheckItem(itemId, e) {
@@ -1353,19 +1613,11 @@ function adjustQty(itemId,delta,e){
   qty=Math.max(0,qty+delta);
   state[itemId].qty=qty;
   saveState();
-  const qnum=document.getElementById('qnum-'+itemId);
-  if(qnum){qnum.textContent=qty;qnum.className='qnum '+(qty<1?'zero':'positive');}
-  const card=document.getElementById('card-'+itemId);
-  if(card){
-    const item=ITEM_MAP[itemId];
-    card.className='item-card'+(qty<1?' is-zero':' is-ok');
-    const sEl=card.querySelector('.item-status');
-    if(sEl){
-      const minS=(ITEM_MAP[itemId]||{}).min||0;
-      const needBuy=qty<=minS;
-      sEl.className='item-status '+(needBuy?'s-need':'s-ok');
-      sEl.textContent=needBuy?(qty<1?'Out of stock — add to shopping list':`Low stock (${qty}) — add to list`):`✅ In stock (${qty})`;
-    }
+  // Full card rebuild so push-to-buy and all other buttons reflect new state
+  const item=ITEM_MAP[itemId];
+  if(item){
+    const oldCard=document.getElementById('card-'+itemId);
+    if(oldCard) oldCard.replaceWith(buildItemCard(item));
   }
   updateRoomProgressFromState();
   updateDoneButton();
@@ -1394,11 +1646,35 @@ function saveNote(){
   closeNoteModal(); showToast('Note saved');
 }
 document.getElementById('note-modal').addEventListener('click',e=>{if(e.target===document.getElementById('note-modal'))closeNoteModal();});
+document.getElementById('store-picker-overlay').addEventListener('click',e=>{if(e.target===document.getElementById('store-picker-overlay'))closeStorePicker();});
 
 // ═══════════════════════════════════════════════════════════
 // SHOPPING LIST
 // ═══════════════════════════════════════════════════════════
-function showShopping(){renderShoppingList();showView('shopping');}
+function showShopping(){
+  // Load buy qtys from Sheet first, then render
+  const url = localStorage.getItem(KEY_URL);
+  if(url){
+    androidSafeGet(`${url}?action=buyqty`).then(json=>{
+      if(json.buyQtys) buyQtysCache = json.buyQtys;
+      // Also merge local cache for optimistic updates
+      try {
+        const local = JSON.parse(localStorage.getItem(KEY_BUY_QTYS)||'{}');
+        Object.assign(buyQtysCache, local);
+      } catch(e){}
+    }).catch(()=>{
+      // Offline — use local cache
+      try { buyQtysCache = JSON.parse(localStorage.getItem(KEY_BUY_QTYS)||'{}'); } catch(e){}
+    }).finally(()=>{
+      renderShoppingList();
+      showView('shopping');
+    });
+  } else {
+    try { buyQtysCache = JSON.parse(localStorage.getItem(KEY_BUY_QTYS)||'{}'); } catch(e){}
+    renderShoppingList();
+    showView('shopping');
+  }
+}
 function renderShoppingList(){
   const scroll=document.getElementById('shop-scroll');
   scroll.innerHTML='';
@@ -1444,32 +1720,57 @@ function renderShoppingList(){
     return;
   }
 
-  // Sweep status header
+  // Sweep status header — scoped to the stores selected for this sweep
   const sweepOn = localStorage.getItem(KEY_SWEEP) === 'true';
   const doneRooms = getRoomsDone();
   const totalRooms = ROOMS.length;
-  const uncheckedRooms = sweepOn ? ROOMS.filter(r=>!doneRooms.includes(r.id)) : [];
-  const totalMustItems = ALL_ITEMS.filter(i=>i.must).length;
-  const checkedMustItems = ALL_ITEMS.filter(i=>i.must&&(state[i.id]||{}).qty!==null).length;
-  const mustPct = totalMustItems>0 ? Math.round(checkedMustItems/totalMustItems*100) : 100;
+  const scope = getSweepScope(); // e.g. ['Supermarket','Wet Market'] — empty = all
 
-  if(sweepOn && (uncheckedRooms.length>0 || mustPct<100)){
+  // Filter must-items to only those in scope
+  const scopedMustItems = ALL_ITEMS.filter(i => {
+    if (!i.must) return false;
+    if (scope.length === 0) return true; // no scope = all stores
+    return scope.includes(i.store || 'Supermarket');
+  });
+  const checkedMustItems = scopedMustItems.filter(i => (state[i.id]||{}).qty !== null).length;
+  const totalMustItems   = scopedMustItems.length;
+  const mustPct = totalMustItems > 0 ? Math.round(checkedMustItems / totalMustItems * 100) : 100;
+  const mustRemaining = totalMustItems - checkedMustItems;
+
+  // Only flag rooms as incomplete if they contain scoped must-items that are unchecked
+  const uncheckedRooms = sweepOn
+    ? ROOMS.filter(r => {
+        if (doneRooms.includes(r.id)) return false;
+        // Room is relevant only if it has unchecked scoped must-items
+        return scopedMustItems.some(i => i.roomId === r.id && (state[i.id]||{}).qty === null);
+      })
+    : [];
+
+  const scopeLabel = scope.length > 0 ? scope.join(' + ') : 'All stores';
+
+  if(sweepOn && (uncheckedRooms.length > 0 || mustPct < 100)){
     const statusBanner=document.createElement('div');
     statusBanner.style.cssText='background:var(--charcoal);border-radius:14px;padding:16px 18px;margin-bottom:14px;';
     statusBanner.innerHTML=`
-      <div style="font-size:13px;font-weight:800;color:#AAA;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Sweep Status</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:800;color:#AAA;text-transform:uppercase;letter-spacing:1.5px;">Sweep Status</div>
+        <div style="font-size:11px;font-weight:700;color:#666;background:rgba(255,255,255,0.08);padding:3px 8px;border-radius:8px;">${scopeLabel}</div>
+      </div>
       <div style="display:flex;gap:12px;margin-bottom:${uncheckedRooms.length>0?'12':'0'}px;">
         <div style="flex:1;text-align:center;">
+          <div style="font-size:28px;font-weight:800;font-family:var(--mono);color:${mustRemaining>0?'#F5C870':'#90D0A0'};">${mustPct}%</div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#777;margin-top:2px;">★ Verified</div>
+          <div style="font-size:11px;color:#666;margin-top:2px;">${checkedMustItems}/${totalMustItems}</div>
+        </div>
+        <div style="flex:1;text-align:center;">
           <div style="font-size:28px;font-weight:800;font-family:var(--mono);color:${uncheckedRooms.length>0?'#F19090':'#90D0A0'};">${uncheckedRooms.length}</div>
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#777;margin-top:2px;">Rooms not done</div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#777;margin-top:2px;">Rooms pending</div>
+          <div style="font-size:11px;color:#666;margin-top:2px;">${doneRooms.length}/${totalRooms} done</div>
         </div>
         <div style="flex:1;text-align:center;">
-          <div style="font-size:28px;font-weight:800;font-family:var(--mono);color:${mustPct<100?'#F5C870':'#90D0A0'};">${mustPct}%</div>
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#777;margin-top:2px;">★ Must-haves checked</div>
-        </div>
-        <div style="flex:1;text-align:center;">
-          <div style="font-size:28px;font-weight:800;font-family:var(--mono);color:white;">${doneRooms.length}/${totalRooms}</div>
-          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#777;margin-top:2px;">Rooms complete</div>
+          <div style="font-size:28px;font-weight:800;font-family:var(--mono);color:${mustRemaining>0?'#F19090':'#90D0A0'};">${mustRemaining}</div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#777;margin-top:2px;">★ Outstanding</div>
+          <div style="font-size:11px;color:#666;margin-top:2px;">must-haves</div>
         </div>
       </div>
       ${uncheckedRooms.length>0?`<div style="background:rgba(241,144,144,0.15);border:1px solid rgba(241,144,144,0.3);border-radius:8px;padding:8px 12px;font-size:13px;color:#F19090;font-weight:600;">⚠️ Not yet checked: ${uncheckedRooms.map(r=>r.name).join(', ')}</div>`:''}
@@ -1520,7 +1821,7 @@ function renderShoppingList(){
         <div style="font-size:12px;color:var(--mid);font-weight:500;">${items.length} item${items.length!==1?'s':''} needed</div>
         ${uncheckedRoomsForStore.length>0?`<div class="unchecked-rooms-badge">⚠️ ${uncheckedRoomsForStore.join(', ')} not yet checked</div>`:''}
       </div>
-      ${items.filter(i=>i.must).length>0?`<div style="background:var(--amber-light);color:var(--amber);font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px;margin-right:6px;">★ ${items.filter(i=>i.must).length} must</div>`:''}
+      ${items.filter(i=>i.must).length>0?`<div style="background:#FFF8E1;color:#C47A2A;border:1.5px solid #F5C870;font-size:12px;font-weight:800;padding:4px 10px;border-radius:20px;margin-right:6px;">★ ${items.filter(i=>i.must).length} verified</div>`:''}
       <span id="chevron-${sectionId}" style="font-size:18px;color:${color};transition:transform 0.25s;display:inline-block;transform:rotate(${isOpen?'0':'180'}deg);">⌄</span>`;
 
     // Body
@@ -1543,17 +1844,50 @@ function renderShoppingList(){
         row.className='shop-item'+(item.must?' must-shop':'');
         row.style.cssText='border-radius:0;margin:0;'+(idx<items.length-1?'border-bottom:1px solid var(--blush-mid);':'');
         row.id='shoprow-'+item.id;
-        const curQty = (state[item.id]||{}).qty || 0;
-        const minS = item.min || 0;
+        const curQty = (state[item.id]||{}).qty ?? 0;
+        const invBadgeClass = curQty === 0 ? 'zero' : 'low';
+        // Load saved buy qty from cache (pre-loaded from Sheet when shopping opened)
+        const savedBuyQty = buyQtysCache[item.id] !== undefined ? buyQtysCache[item.id] : '';
+        const lastQtyForItem = getLastQty(item.id);
+        const lastDisplay = lastQtyForItem !== null ? lastQtyForItem : '—';
+        const invClass = curQty === 0 ? 'zero' : 'low';
+        const hasBuyVal = savedBuyQty !== '';
+        // Credibility label — tells shopping list user how reliable the count is
+        const isForcedBuy = !!(state[item.id]||{}).forceBuy;
+        const credLabel = item.must
+          ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;background:#FFF8E1;color:#C47A2A;border:1.5px solid #F5C870;padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">★ VERIFIED COUNT</span>`
+          : isForcedBuy
+          ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;background:#E8F0FE;color:#1A56BB;border:1.5px solid #AABFEE;padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">🛒 REQUESTED</span>`
+          : `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;background:var(--blush);color:var(--mid);border:1.5px solid var(--blush-mid);padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">REPORTED</span>`;
+
         row.innerHTML=`
           <div class="shop-check" id="shopcheck-${item.id}" onclick="toggleShopCheck('${item.id}')"></div>
-          <div style="flex:1">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-              <span class="shop-item-name">${item.must?'★ ':''}${item.name}</span>
-              <span style="background:${curQty===0?'var(--red-light)':'var(--amber-light)'};color:${curQty===0?'var(--red)':'var(--amber)'};font-size:11px;font-weight:800;padding:2px 7px;border-radius:10px;font-family:var(--mono);">${curQty} left</span>
-              ${minS>0?`<span style="font-size:11px;color:var(--mid);font-style:italic;">min:${minS}</span>`:''}
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
+              <span class="shop-item-name">${item.name}</span>
+              ${credLabel}
             </div>
-            <div style="font-size:12px;color:var(--mid);margin-top:1px;font-weight:500;">${item.subcat||''}</div>
+            <div style="font-size:12px;color:var(--mid);font-weight:500;margin-bottom:6px;">${item.subcat||''}</div>
+            <div class="shop-qty-table">
+              <div class="sqt-cell cell-last">
+                <div class="sqt-label">Last</div>
+                <div class="sqt-num">${lastDisplay}</div>
+              </div>
+              <div class="sqt-cell cell-inv ${invClass}">
+                <div class="sqt-label">In Stock</div>
+                <div class="sqt-num">${curQty}</div>
+              </div>
+              <div class="sqt-cell cell-buy${hasBuyVal?' has-val':''}" id="sqt-buy-${item.id}">
+                <div class="sqt-label">To Buy</div>
+                <input class="sqt-input"
+                       id="buyqty-${item.id}"
+                       type="number" min="0" inputmode="numeric"
+                       placeholder="?"
+                       value="${savedBuyQty}"
+                       onchange="saveBuyQty('${item.id}',this.value)"
+                       oninput="document.getElementById('sqt-buy-${item.id}').classList.toggle('has-val',this.value!=='');this.style.color=this.value?'var(--sage-dark)':'var(--charcoal-mid)'">
+              </div>
+            </div>
             ${note?`<span class="shop-note-text">📝 ${note}</span>`:''}
           </div>`;
         listWrap.appendChild(row);
@@ -1588,6 +1922,25 @@ function toggleShopCheck(itemId){
   document.getElementById('shoprow-'+itemId)?.classList.toggle('checked-item');
 }
 
+function saveBuyQty(itemId, val) {
+  const num = val.trim();
+  const qty = (num === '' || isNaN(num)) ? null : Number(num);
+
+  // Update local cache immediately (optimistic)
+  const local = JSON.parse(localStorage.getItem(KEY_BUY_QTYS)||'{}');
+  if(qty === null) { delete local[itemId]; delete buyQtysCache[itemId]; }
+  else { local[itemId] = qty; buyQtysCache[itemId] = qty; }
+  localStorage.setItem(KEY_BUY_QTYS, JSON.stringify(local));
+
+  // Persist to Sheet in background
+  const url = localStorage.getItem(KEY_URL);
+  if(!url) return;
+  androidSafePost(url, { action:'savebuyqty', itemId, qty }).catch(e=>{
+    console.warn('saveBuyQty sync failed:', e);
+    // Already saved locally — will be picked up next time sheet loads
+  });
+}
+
 function shareList(){
   const lists={Supermarket:[],Online:[],'Wet Market':[]};
   ALL_ITEMS.forEach(item=>{
@@ -1602,10 +1955,17 @@ function shareList(){
   });
   const total=lists.Supermarket.length+lists.Online.length+lists['Wet Market'].length;
   if(!total){showToast('Nothing to share!');return;}
+  const buyQtys = buyQtysCache;
   const fmt=(name,items)=>{
     if(!items.length) return '';
-    const must=items.filter(i=>i.must).map(i=>'  ★ '+i.name);
-    const other=items.filter(i=>!i.must).map(i=>'  • '+i.name);
+    const fmt1 = i => {
+      const inv = (state[i.id]||{}).qty ?? 0;
+      const buy = buyQtys[i.id] !== undefined ? buyQtys[i.id] : '?';
+      const prefix = i.must ? '  ★ ' : '  • ';
+      return `${prefix}${i.name}  [stock:${inv} · buy:${buy}]`;
+    };
+    const must=items.filter(i=>i.must).map(fmt1);
+    const other=items.filter(i=>!i.must).map(fmt1);
     return `${name} (${items.length}):\n`+[...must,...other].join('\n')+'\n';
   };
   const text=`🛒 Shopping List — ${new Date().toLocaleDateString('en-AU')}\n\n`
