@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v10</title>
+<title>Home Inventory v12</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -326,6 +326,42 @@
   .toast.show{opacity:1;}
   @keyframes shake{0%,100%{transform:translateX(0);}20%{transform:translateX(-6px);}40%{transform:translateX(6px);}60%{transform:translateX(-4px);}80%{transform:translateX(4px);}}
   .shake{animation:shake 0.4s ease;}
+
+  /* ── SHOW-ALL TOGGLE (v12) ── */
+  .show-all-toggle-wrap{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 2px;}
+  .show-all-label{font-size:12px;font-weight:700;color:var(--charcoal-mid);letter-spacing:0.3px;}
+  .show-all-label em{color:var(--amber);font-style:normal;}
+  .toggle-pill{display:flex;align-items:center;gap:0;background:var(--blush);border:2px solid var(--blush-mid);border-radius:20px;overflow:hidden;cursor:pointer;transition:all 0.15s;}
+  .toggle-pill:active{opacity:0.8;}
+  .tpill-opt{padding:6px 13px;font-size:12px;font-weight:800;color:var(--mid);transition:all 0.15s;white-space:nowrap;}
+  .tpill-opt.active{background:var(--charcoal);color:white;border-radius:18px;}
+  .tpill-opt.active.amber{background:var(--amber);color:white;}
+
+  /* ── ENHANCED MUST-UNCHECKED CARD (v12) ── */
+  .item-card.must-unchecked{
+    border-color:#D4880A!important;
+    background:linear-gradient(135deg,#FFFBF0 0%,#FFF0CC 100%)!important;
+    box-shadow:0 0 0 3px rgba(228,160,48,0.25), 4px 0 0 0 #D4880A inset!important;
+    animation:card-pulse 1.8s ease-in-out infinite;
+    position:relative;
+  }
+  .item-card.must-unchecked::before{
+    content:'';position:absolute;left:0;top:0;bottom:0;width:4px;
+    background:linear-gradient(180deg,#F0A830,#D4880A);border-radius:10px 0 0 10px;
+  }
+  @keyframes card-pulse{
+    0%,100%{box-shadow:0 0 0 2px rgba(228,160,48,0.2), 4px 0 0 0 #D4880A inset;}
+    50%{box-shadow:0 0 0 5px rgba(228,160,48,0.38), 4px 0 0 0 #D4880A inset;}
+  }
+
+  /* ── NON-MUST ITEMS DIMMED IN MUST-ONLY MODE (v12) ── */
+  .item-card.non-must-dimmed{
+    opacity:0.45;
+    filter:saturate(0.4);
+    pointer-events:none;
+  }
+  /* Subcategory hidden in must-only mode (no must items in it) */
+  .subcat-hidden-in-must-mode{display:none!important;}
 </style>
 </head>
 <body>
@@ -559,6 +595,9 @@ let state = {};
 // Current sweep tracking
 let USERS_LIST      = ['Maricor', 'Rechel'];  // default, overridden from Sheet
 let buyQtysCache    = {};  // buy qtys loaded from Sheet when shopping list opens
+
+// v12: per-room "show all items" toggle (default: must-only when sweep active)
+let showAllItems = false;
 
 // ═══════════════════════════════════════════════════════════
 // BOOT
@@ -1303,6 +1342,7 @@ function clearSearch(){document.getElementById('search-input').value='';onSearch
 // ═══════════════════════════════════════════════════════════
 function openRoom(roomId){
   currentRoomId=roomId;
+  showAllItems = false; // v12: always start in must-only mode when sweep is active
   const room=ROOMS.find(r=>r.id===roomId);
   if(!room) return;
   document.getElementById('room-eyebrow').textContent=room.icon+'  '+room.name;
@@ -1315,59 +1355,146 @@ function openRoom(roomId){
 function renderRoomItems(room){
   const scroll=document.getElementById('items-scroll');
   scroll.innerHTML='';
-  let total=0,checked=0;
-  Object.values(room.subcats).forEach(items=>items.forEach(item=>{total++;if((state[item.id]||{}).qty!==null)checked++;}));
-  updateRoomProgress(checked,total);
-  Object.entries(room.subcats).forEach(([subcatName,items])=>{
-    const subcatId='subcat-'+subcatName.replace(/[^a-z0-9]/gi,'_');
-    const checkedCount=items.filter(i=>(state[i.id]||{}).qty!==null).length;
-    // Scope — only flag ★ items relevant to the active sweep's stores
-    const subcatScope = getSweepScope();
-    const subcatSweepOn = localStorage.getItem(KEY_SWEEP) === 'true';
-    const scopedMust = items.filter(i => {
+
+  const sweepOn = localStorage.getItem(KEY_SWEEP) === 'true';
+  const scope   = getSweepScope();
+
+  // Determine which items are "in scope" for this sweep (store filter)
+  const inScopeForSweep = item =>
+    !sweepOn || scope.length === 0 || scope.includes(item.store || 'Supermarket');
+
+  // Must-only mode: active when sweep is on AND showAllItems is false
+  const mustOnlyMode = sweepOn && !showAllItems;
+
+  // Count totals (always over ALL items in room for progress bar)
+  let total=0, checked=0;
+  Object.values(room.subcats).forEach(items=>items.forEach(item=>{
+    total++;
+    if((state[item.id]||{}).qty!==null) checked++;
+  }));
+  updateRoomProgress(checked, total);
+
+  // ── Toggle bar (only shown when sweep is active) ──
+  if (sweepOn) {
+    const scopedMustTotal = Object.values(room.subcats)
+      .flatMap(items => items)
+      .filter(i => i.must && inScopeForSweep(i)).length;
+    const scopedMustUnchecked = Object.values(room.subcats)
+      .flatMap(items => items)
+      .filter(i => i.must && inScopeForSweep(i) && (state[i.id]||{}).qty === null).length;
+
+    const toggleWrap = document.createElement('div');
+    toggleWrap.className = 'show-all-toggle-wrap';
+    const modeLabel = mustOnlyMode
+      ? `Showing <em>★ ${scopedMustTotal} must-check</em> items · ${scopedMustUnchecked > 0 ? scopedMustUnchecked + ' remaining' : 'all done ✓'}`
+      : `Showing all items in room`;
+    toggleWrap.innerHTML = `
+      <div class="show-all-label">${modeLabel}</div>
+      <div class="toggle-pill" onclick="toggleShowAll('${room.id}')">
+        <div class="tpill-opt${mustOnlyMode ? ' active amber' : ''}">★ Must</div>
+        <div class="tpill-opt${!mustOnlyMode ? ' active' : ''}">All</div>
+      </div>`;
+    scroll.appendChild(toggleWrap);
+  }
+
+  Object.entries(room.subcats).forEach(([subcatName, items]) => {
+    const subcatId = 'subcat-'+subcatName.replace(/[^a-z0-9]/gi,'_');
+
+    // Scoped must-item counts for this subcat
+    const subcatScope    = scope;
+    const subcatSweepOn  = sweepOn;
+    const scopedMust     = items.filter(i => {
       if (!i.must) return false;
       if (!subcatSweepOn || subcatScope.length === 0) return true;
       return subcatScope.includes(i.store || 'Supermarket');
     });
-    const mustCount = scopedMust.length;
-    const mustUnchecked = scopedMust.filter(i => (state[i.id]||{}).qty === null).length;
-    // Always start collapsed — user taps to expand
-    const isOpen=false;
+    const mustCount      = scopedMust.length;
+    const mustUnchecked  = scopedMust.filter(i => (state[i.id]||{}).qty === null).length;
+    const checkedCount   = items.filter(i => (state[i.id]||{}).qty !== null).length;
 
-    const div=document.createElement('div');
-    div.className='subcat-divider';
+    // In must-only mode: skip entire subcat if it has no scoped must items
+    if (mustOnlyMode && mustCount === 0) return;
+
+    const div = document.createElement('div');
+    div.className = 'subcat-divider';
     const scopeTag = mustUnchecked > 0 && subcatSweepOn && subcatScope.length > 0
       ? ` <span style="font-size:9px;opacity:0.7;">(${subcatScope.join('+')})</span>` : '';
-    const mustBadge=mustCount>0
+    const mustBadge = mustCount > 0
       ? `<span style="background:${mustUnchecked>0?'var(--amber-light)':'var(--sage-light)'};color:${mustUnchecked>0?'var(--amber)':'var(--sage-dark)'};font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;">★ ${mustUnchecked>0?mustUnchecked+' must left'+scopeTag:'must ✓'}</span>`
       : '';
-    div.innerHTML=`
+
+    // In must-only mode, show only the must count; in all mode show full count
+    const countDisplay = mustOnlyMode
+      ? `${scopedMust.filter(i=>(state[i.id]||{}).qty!==null).length}/${mustCount} ★`
+      : `${checkedCount}/${items.length}`;
+
+    div.innerHTML = `
       <div class="subcat-divider-text">${subcatName}</div>
       ${mustBadge}
-      <div class="subcat-divider-count">${checkedCount}/${items.length}</div>
+      <div class="subcat-divider-count">${countDisplay}</div>
       <span class="subcat-chevron" id="chevron-${subcatId}" style="transform:rotate(180deg)">⌄</span>`;
     scroll.appendChild(div);
 
-    const wrap=document.createElement('div');
-    wrap.className='subcat-items-wrap subcat-body';
-    wrap.id=subcatId;
-    wrap.style.maxHeight='0';
-    items.forEach(item=>wrap.appendChild(buildItemCard(item)));
+    const wrap = document.createElement('div');
+    wrap.className = 'subcat-items-wrap subcat-body';
+    wrap.id = subcatId;
+
+    // In must-only mode: auto-expand subcats so must items are immediately visible
+    // In all-items mode: start collapsed as before (user taps to expand)
+    const startOpen = mustOnlyMode && mustUnchecked > 0;
+    wrap.style.maxHeight = startOpen ? '9999px' : '0';
+
+    items.forEach(item => {
+      // In must-only mode: hide non-scoped-must items entirely
+      const isScopedMust = item.must && inScopeForSweep(item);
+      if (mustOnlyMode && !isScopedMust) return;
+
+      const card = buildItemCard(item);
+      wrap.appendChild(card);
+    });
+
     scroll.appendChild(wrap);
 
-    div.addEventListener('click',()=>{
-      const body=document.getElementById(subcatId);
-      const chevron=document.getElementById('chevron-'+subcatId);
-      const nowOpen=body.style.maxHeight!=='0px'&&body.style.maxHeight!=='0';
-      if(nowOpen){body.style.maxHeight='0';chevron.style.transform='rotate(180deg)';}
-      else{body.style.maxHeight='9999px';chevron.style.transform='rotate(0deg)';}
+    // Update chevron to match initial open state
+    const chevronEl = div.querySelector('.subcat-chevron');
+    if (chevronEl) chevronEl.style.transform = startOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+
+    div.addEventListener('click', () => {
+      const body    = document.getElementById(subcatId);
+      const chevron = document.getElementById('chevron-'+subcatId);
+      const nowOpen = body.style.maxHeight !== '0px' && body.style.maxHeight !== '0';
+      if (nowOpen) { body.style.maxHeight='0'; chevron.style.transform='rotate(180deg)'; }
+      else         { body.style.maxHeight='9999px'; chevron.style.transform='rotate(0deg)'; }
     });
   });
 }
 
+// v12: Toggle between must-only and show-all modes
+function toggleShowAll(roomId) {
+  showAllItems = !showAllItems;
+  const room = ROOMS.find(r => r.id === roomId);
+  if (room) renderRoomItems(room);
+  updateDoneButton();
+}
+
+
 function updateRoomProgress(checked,total){
   const pct=total>0?Math.round(checked/total*100):0;
   document.getElementById('room-progress-bar').style.width=pct+'%';
+  const sweepOn = localStorage.getItem(KEY_SWEEP) === 'true';
+  const mustOnlyMode = sweepOn && !showAllItems;
+  if (mustOnlyMode) {
+    const room = ROOMS.find(r=>r.id===currentRoomId);
+    if (room) {
+      const scope = getSweepScope();
+      const allMust = Object.values(room.subcats).flatMap(items=>items)
+        .filter(i => i.must && (scope.length===0 || scope.includes(i.store||'Supermarket')));
+      const mustChecked = allMust.filter(i=>(state[i.id]||{}).qty!==null).length;
+      document.getElementById('room-progress-label').textContent=
+        `${mustChecked} of ${allMust.length} ★ must-haves checked · ${checked}/${total} total`;
+      return;
+    }
+  }
   document.getElementById('room-progress-label').textContent=`${checked} of ${total} checked`;
 }
 function updateRoomProgressFromState(){
@@ -1376,6 +1503,26 @@ function updateRoomProgressFromState(){
   let total=0,checked=0;
   Object.values(room.subcats).forEach(items=>items.forEach(item=>{total++;if((state[item.id]||{}).qty!==null)checked++;}));
   updateRoomProgress(checked,total);
+
+  // v12: refresh the toggle label text so "X remaining" stays live
+  const sweepOn = localStorage.getItem(KEY_SWEEP) === 'true';
+  if (sweepOn) {
+    const labelEl = document.querySelector('.show-all-label');
+    if (labelEl) {
+      const scope = getSweepScope();
+      const inScopeForSweep = item =>
+        scope.length === 0 || scope.includes(item.store || 'Supermarket');
+      const mustOnlyMode = !showAllItems;
+      const scopedMust = Object.values(room.subcats).flatMap(items=>items)
+        .filter(i => i.must && inScopeForSweep(i));
+      const scopedMustUnchecked = scopedMust.filter(i=>(state[i.id]||{}).qty===null).length;
+      if (mustOnlyMode) {
+        labelEl.innerHTML = `Showing <em>★ ${scopedMust.length} must-check</em> items · ${scopedMustUnchecked>0?scopedMustUnchecked+' remaining':'all done ✓'}`;
+      } else {
+        labelEl.innerHTML = `Showing all items in room`;
+      }
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1420,8 +1567,28 @@ async function tryFinishRoom(){
     const btn=document.getElementById('done-room-btn');
     btn.classList.add('shake');setTimeout(()=>btn.classList.remove('shake'),400);
     showToast(`⚠️ ${unc.length} ★ item${unc.length>1?'s':''} not yet checked`);
-    const el=document.getElementById('card-'+unc[0].id);
-    if(el) el.scrollIntoView({behavior:'smooth',block:'center'});
+    // Make sure the first unchecked item is visible — expand its subcat if collapsed
+    const firstUnc = unc[0];
+    const room = ROOMS.find(r=>r.id===currentRoomId);
+    if (room && firstUnc) {
+      // Find which subcat it belongs to
+      for (const [subcatName, items] of Object.entries(room.subcats)) {
+        if (items.some(i => i.id === firstUnc.id)) {
+          const subcatId = 'subcat-'+subcatName.replace(/[^a-z0-9]/gi,'_');
+          const body = document.getElementById(subcatId);
+          const chevron = document.getElementById('chevron-'+subcatId);
+          if (body && (body.style.maxHeight === '0px' || body.style.maxHeight === '0')) {
+            body.style.maxHeight = '9999px';
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+          }
+          break;
+        }
+      }
+    }
+    setTimeout(()=>{
+      const el=document.getElementById('card-'+firstUnc.id);
+      if(el) el.scrollIntoView({behavior:'smooth',block:'center'});
+    }, 100);
     return;
   }
   localStorage.setItem('last_check',Date.now());
@@ -1507,7 +1674,7 @@ function buildItemCard(item){
   else if(needsBuying)cardClass+=' is-zero';
   else if(isOk)cardClass+=' is-ok';
   let sClass='item-status ',sText='';
-  if(isMustUnc){sClass+='s-must-unchecked';sText='⚠️ Must check — tap + or − to record';}
+  if(isMustUnc){sClass+='s-must-unchecked';sText='⚠️ Required — tap + or − to record qty';}
   else if(!isChecked){sClass+='s-unchecked';sText='Not checked yet';}
   else if(needsBuying){sClass+='s-need';sText=qty<1?'Out of stock — add to shopping list':`Low stock (${qty}, need ${minStock+1}+) — add to list`;}
   else{sClass+='s-ok';sText=`✅ In stock (${qty})`;}
