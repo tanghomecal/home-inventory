@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v12</title>
+<title>Home Inventory v13</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -1819,20 +1819,41 @@ document.getElementById('store-picker-overlay').addEventListener('click',e=>{if(
 // SHOPPING LIST
 // ═══════════════════════════════════════════════════════════
 function showShopping(){
-  // Load buy qtys from Sheet first, then render
+  // Load buy qtys and stock from Sheet first, then render.
+  // Fetching stock ensures a second device (e.g. the shopper's phone) sees
+  // the latest sweep data even if it never did the sweep itself.
   const url = localStorage.getItem(KEY_URL);
   if(url){
-    androidSafeGet(`${url}?action=buyqty`).then(json=>{
+    const buyQtyPromise = androidSafeGet(`${url}?action=buyqty`).then(json=>{
       if(json.buyQtys) buyQtysCache = json.buyQtys;
-      // Also merge local cache for optimistic updates
+      // Merge local cache for optimistic updates
       try {
         const local = JSON.parse(localStorage.getItem(KEY_BUY_QTYS)||'{}');
         Object.assign(buyQtysCache, local);
       } catch(e){}
     }).catch(()=>{
-      // Offline — use local cache
       try { buyQtysCache = JSON.parse(localStorage.getItem(KEY_BUY_QTYS)||'{}'); } catch(e){}
-    }).finally(()=>{
+    });
+
+    const stockPromise = androidSafeGet(`${url}?action=stock`).then(json=>{
+      if(json.stock){
+        // Merge Sheet stock into local state (in-memory only — don't persist
+        // to localStorage so we don't overwrite the sweep device's state).
+        // Only fill in items that have no local qty recorded (state is empty
+        // on a device that didn't do the sweep).
+        const hasLocalData = Object.values(state).some(s => s.qty !== null && s.qty !== undefined);
+        if(!hasLocalData){
+          // Device has no sweep data — load everything from Sheet
+          Object.entries(json.stock).forEach(([id, s]) => {
+            state[id] = { qty: s.qty, note: s.note || '', forceBuy: false };
+          });
+        }
+      }
+    }).catch(()=>{
+      // Offline — use whatever is in local state already
+    });
+
+    Promise.all([buyQtyPromise, stockPromise]).finally(()=>{
       renderShoppingList();
       showView('shopping');
     });
