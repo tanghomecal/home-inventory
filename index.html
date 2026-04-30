@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v13</title>
+<title>Home Inventory v14</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -1819,14 +1819,16 @@ document.getElementById('store-picker-overlay').addEventListener('click',e=>{if(
 // SHOPPING LIST
 // ═══════════════════════════════════════════════════════════
 function showShopping(){
-  // Load buy qtys and stock from Sheet first, then render.
-  // Fetching stock ensures a second device (e.g. the shopper's phone) sees
-  // the latest sweep data even if it never did the sweep itself.
+  // v14: fetch both buyqty and stock from Sheet.
+  // On a second device that never did the sweep, state is all nulls and
+  // KEY_SWEEP is unset — so we load stock from the Sheet to populate state
+  // in-memory before rendering.
   const url = localStorage.getItem(KEY_URL);
+  const hasLocalSweepData = ALL_ITEMS.some(i => (state[i.id]||{}).qty !== null);
+
   if(url){
     const buyQtyPromise = androidSafeGet(`${url}?action=buyqty`).then(json=>{
       if(json.buyQtys) buyQtysCache = json.buyQtys;
-      // Merge local cache for optimistic updates
       try {
         const local = JSON.parse(localStorage.getItem(KEY_BUY_QTYS)||'{}');
         Object.assign(buyQtysCache, local);
@@ -1835,23 +1837,22 @@ function showShopping(){
       try { buyQtysCache = JSON.parse(localStorage.getItem(KEY_BUY_QTYS)||'{}'); } catch(e){}
     });
 
-    const stockPromise = androidSafeGet(`${url}?action=stock`).then(json=>{
-      if(json.stock){
-        // Merge Sheet stock into local state (in-memory only — don't persist
-        // to localStorage so we don't overwrite the sweep device's state).
-        // Only fill in items that have no local qty recorded (state is empty
-        // on a device that didn't do the sweep).
-        const hasLocalData = Object.values(state).some(s => s.qty !== null && s.qty !== undefined);
-        if(!hasLocalData){
-          // Device has no sweep data — load everything from Sheet
-          Object.entries(json.stock).forEach(([id, s]) => {
-            state[id] = { qty: s.qty, note: s.note || '', forceBuy: false };
-          });
-        }
-      }
-    }).catch(()=>{
-      // Offline — use whatever is in local state already
-    });
+    // Always fetch stock if this device has no local sweep data
+    const stockPromise = !hasLocalSweepData
+      ? androidSafeGet(`${url}?action=stock`).then(json=>{
+          if(json.stock && Object.keys(json.stock).length > 0){
+            // Load Sheet stock into state in-memory (not persisted to localStorage)
+            Object.entries(json.stock).forEach(([id, s]) => {
+              state[id] = { qty: s.qty, note: s.note || '', forceBuy: false };
+            });
+            // Mark as if a sweep was completed so renderShoppingList doesn't
+            // show "No check done yet" — we set it in-memory only
+            if(localStorage.getItem(KEY_SWEEP) === null){
+              localStorage.setItem(KEY_SWEEP, 'false');
+            }
+          }
+        }).catch(()=>{})
+      : Promise.resolve();
 
     Promise.all([buyQtyPromise, stockPromise]).finally(()=>{
       renderShoppingList();
