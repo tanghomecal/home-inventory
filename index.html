@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v15</title>
+<title>Home Inventory v16</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -784,11 +784,22 @@ async function syncToSheet() {
   if (!url) return;
 
   setSyncBadge('syncing', 'Syncing…');
+  // v16: build a stable sweep ID from start timestamp + user — used as the
+  // key in 📜 Stock Snapshots so all room syncs in one sweep share the same ID
+  const user     = localStorage.getItem(KEY_USER) || 'Helper';
+  const startTs  = localStorage.getItem(KEY_SWEEP_START);
+  const sweepId  = startTs
+    ? new Date(Number(startTs)).toISOString().slice(0,16).replace(/[-:T]/g,m=>m==='-'?m:m===':'?m:'_') + '_' + user.replace(/\s+/g,'')
+    : new Date().toISOString().slice(0,16).replace('T','_') + '_' + user.replace(/\s+/g,'');
+  const scope    = getSweepScope();
   const payload = {
-    action: 'sync',
-    stock:  state,
-    date:   new Date().toLocaleDateString('en-AU'),
-    user:   localStorage.getItem(KEY_USER) || 'Helper',
+    action:   'sync',
+    stock:    state,
+    date:     new Date().toLocaleDateString('en-AU'),
+    time:     new Date().toLocaleTimeString('en-AU', {hour:'2-digit',minute:'2-digit'}),
+    user,
+    sweepId,
+    scope:    scope.join(', ') || 'All',
   };
   try {
     const json = await androidSafePost(url, payload);
@@ -824,6 +835,13 @@ async function logSweepHistory(roomNames, checked, needed, status) {
       itemsNeeded:  needed,
       status:       status || 'Complete',
       scope:        scope.join(', ') || 'All',
+      sweepId:      (() => {
+        const user    = localStorage.getItem(KEY_USER) || 'Helper';
+        const startTs = localStorage.getItem(KEY_SWEEP_START);
+        return startTs
+          ? new Date(Number(startTs)).toISOString().slice(0,16).replace(/[-:T]/g,m=>m==='-'?m:m===':'?m:'_') + '_' + user.replace(/\s+/g,'')
+          : now.toISOString().slice(0,16).replace('T','_') + '_' + user.replace(/\s+/g,'');
+      })(),
     });
   } catch(e) { console.warn('logHistory:', e); }
 }
@@ -1951,10 +1969,17 @@ function showSweepPickerAgain(url){
 function _fetchStockAndRender(url){
   const scroll = document.getElementById('shop-scroll');
   scroll.innerHTML = '<div style="text-align:center;padding:48px 24px;color:var(--charcoal-mid);font-size:15px;font-weight:600;">Loading stock data…</div>';
-  androidSafeGet(`${url}?action=stock`).then(json=>{
-    if(json.stock && Object.keys(json.stock).length > 0){
-      // Load Sheet stock into state in-memory only — don't persist
-      Object.entries(json.stock).forEach(([id, s]) => {
+  // v16: fetch from 📜 Stock Snapshots using the selected sweep's ID.
+  // Falls back to 📦 Current Stock if no sweepId available.
+  const sweepId = currentSweepMeta && currentSweepMeta.sweepId;
+  const endpoint = sweepId
+    ? `${url}?action=stocksnapshot&sweepId=${encodeURIComponent(sweepId)}`
+    : `${url}?action=stock`;
+  androidSafeGet(endpoint).then(json=>{
+    const stockData = json.stock || json.snapshot || {};
+    if(Object.keys(stockData).length > 0){
+      // Load into state in-memory only — never persist to localStorage
+      Object.entries(stockData).forEach(([id, s]) => {
         state[id] = { qty: s.qty, note: s.note || '', forceBuy: false };
       });
       if(localStorage.getItem(KEY_SWEEP) === null){
