@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v14</title>
+<title>Home Inventory v15</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -235,6 +235,27 @@
   .done-room-btn.locked{background:var(--blush);color:var(--blush-dark);cursor:not-allowed;}
   .done-room-btn.unlocked:active{transform:scale(0.98);}
   .lock-reason{font-size:13px;font-weight:600;color:var(--amber);text-align:center;margin-bottom:6px;min-height:18px;}
+
+  /* ── SWEEP PICKER MODAL (v15) ── */
+  .sweep-picker-overlay{display:none;position:fixed;inset:0;background:rgba(45,45,45,0.55);z-index:998;align-items:flex-end;justify-content:center;}
+  .sweep-picker-overlay.active{display:flex;}
+  .sweep-picker-sheet{background:var(--white);width:100%;max-width:480px;border-radius:24px 24px 0 0;padding:20px 20px 44px;animation:slideUp 0.25s ease;}
+  .sweep-picker-handle{width:40px;height:4px;background:var(--blush-mid);border-radius:2px;margin:0 auto 18px;}
+  .sweep-picker-title{font-size:18px;font-weight:800;color:var(--charcoal);margin-bottom:4px;}
+  .sweep-picker-sub{font-size:13px;color:var(--charcoal-mid);margin-bottom:18px;font-weight:500;}
+  .sweep-option{display:flex;flex-direction:column;gap:4px;padding:16px;border:2px solid var(--blush-mid);border-radius:14px;margin-bottom:10px;cursor:pointer;background:var(--rose-white);transition:border-color 0.15s,background 0.15s;}
+  .sweep-option:active{background:var(--blush);border-color:var(--sage);}
+  .sweep-option-top{display:flex;align-items:center;justify-content:space-between;}
+  .sweep-option-scope{font-size:15px;font-weight:800;color:var(--charcoal);}
+  .sweep-option-age{font-size:12px;font-weight:700;color:var(--mid);background:var(--blush);padding:3px 8px;border-radius:8px;}
+  .sweep-option-meta{font-size:12px;color:var(--charcoal-mid);font-weight:500;}
+  .sweep-option-counts{font-size:12px;color:var(--sage-dark);font-weight:700;}
+  .sweep-cancel-btn{width:100%;padding:15px;border:2px solid var(--blush-mid);border-radius:14px;background:transparent;font-family:var(--font);font-size:15px;font-weight:700;color:var(--mid);cursor:pointer;margin-top:4px;}
+  /* ── SWEEP INFO BANNER (v15) ── */
+  .sweep-info-banner{background:linear-gradient(135deg,var(--sage-light),var(--blush));border:1.5px solid var(--sage-mid);border-radius:14px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .sweep-info-text{font-size:13px;color:var(--charcoal-mid);font-weight:500;line-height:1.5;}
+  .sweep-info-text strong{color:var(--charcoal);font-weight:800;}
+  .sweep-info-change{font-size:12px;font-weight:700;color:var(--sage-dark);background:var(--white);border:1.5px solid var(--sage-mid);padding:6px 12px;border-radius:10px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
 
   /* ── NOTE MODAL ── */
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(45,45,45,0.5);z-index:999;align-items:flex-end;}
@@ -551,6 +572,17 @@
 </div>
 
 <!-- Note Modal -->
+<!-- v15: Sweep Picker Modal -->
+<div class="sweep-picker-overlay" id="sweep-picker-modal">
+  <div class="sweep-picker-sheet">
+    <div class="sweep-picker-handle"></div>
+    <div class="sweep-picker-title">Choose a Sweep</div>
+    <div class="sweep-picker-sub">Select which sweep to view the shopping list for</div>
+    <div id="sweep-picker-options"></div>
+    <button class="sweep-cancel-btn" onclick="closeSweepPicker()">Cancel</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="note-modal">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
@@ -1818,15 +1850,30 @@ document.getElementById('store-picker-overlay').addEventListener('click',e=>{if(
 // ═══════════════════════════════════════════════════════════
 // SHOPPING LIST
 // ═══════════════════════════════════════════════════════════
+// ── v15: Sweep picker state ──────────────────────────────────────────────────
+let currentSweepMeta = null; // { date, time, by, scope, itemsChecked, itemsNeeded }
+
 function showShopping(){
-  // v14: fetch both buyqty and stock from Sheet.
-  // On a second device that never did the sweep, state is all nulls and
-  // KEY_SWEEP is unset — so we load stock from the Sheet to populate state
-  // in-memory before rendering.
+  // v15: always fetch items (if missing), buyqty, stock, and last 3 sweeps.
+  // Then show sweep picker so the user chooses which sweep to view.
   const url = localStorage.getItem(KEY_URL);
-  const hasLocalSweepData = ALL_ITEMS.some(i => (state[i.id]||{}).qty !== null);
+  showView('shopping');
+  const scroll = document.getElementById('shop-scroll');
+  scroll.innerHTML = '<div style="text-align:center;padding:48px 24px;color:var(--charcoal-mid);font-size:15px;font-weight:600;">Loading…</div>';
+  document.getElementById('shop-sub-text').textContent = '—';
+
+  const needsItems = ALL_ITEMS.length === 0;
 
   if(url){
+    const itemsPromise = needsItems
+      ? androidSafeGet(`${url}?action=items`).then(json=>{
+          if(json.items && json.items.length > 0){
+            buildRoomsFromItems(json.items);
+            localStorage.setItem(KEY_ITEMS, JSON.stringify(json.items));
+          }
+        }).catch(()=>{})
+      : Promise.resolve();
+
     const buyQtyPromise = androidSafeGet(`${url}?action=buyqty`).then(json=>{
       if(json.buyQtys) buyQtysCache = json.buyQtys;
       try {
@@ -1837,32 +1884,86 @@ function showShopping(){
       try { buyQtysCache = JSON.parse(localStorage.getItem(KEY_BUY_QTYS)||'{}'); } catch(e){}
     });
 
-    // Always fetch stock if this device has no local sweep data
-    const stockPromise = !hasLocalSweepData
-      ? androidSafeGet(`${url}?action=stock`).then(json=>{
-          if(json.stock && Object.keys(json.stock).length > 0){
-            // Load Sheet stock into state in-memory (not persisted to localStorage)
-            Object.entries(json.stock).forEach(([id, s]) => {
-              state[id] = { qty: s.qty, note: s.note || '', forceBuy: false };
-            });
-            // Mark as if a sweep was completed so renderShoppingList doesn't
-            // show "No check done yet" — we set it in-memory only
-            if(localStorage.getItem(KEY_SWEEP) === null){
-              localStorage.setItem(KEY_SWEEP, 'false');
-            }
-          }
-        }).catch(()=>{})
-      : Promise.resolve();
+    const sweepsPromise = androidSafeGet(`${url}?action=lastsweep`).then(json=>{
+      return json.sweeps || [];
+    }).catch(()=>{ return []; });
 
-    Promise.all([buyQtyPromise, stockPromise]).finally(()=>{
-      renderShoppingList();
-      showView('shopping');
+    Promise.all([itemsPromise, buyQtyPromise, sweepsPromise]).then(([,,sweeps])=>{
+      if(sweeps.length === 0){
+        // No history from Sheet — fall back to local state
+        _loadLocalStateAndRender();
+        return;
+      }
+      // Always ask which sweep to view (per user preference)
+      openSweepPicker(sweeps, url);
     });
   } else {
     try { buyQtysCache = JSON.parse(localStorage.getItem(KEY_BUY_QTYS)||'{}'); } catch(e){}
-    renderShoppingList();
-    showView('shopping');
+    _loadLocalStateAndRender();
   }
+}
+
+function _loadLocalStateAndRender(){
+  // Fallback: render from local state (sweep device, or offline)
+  if(localStorage.getItem(KEY_SWEEP) === null){
+    localStorage.setItem(KEY_SWEEP, 'false');
+  }
+  renderShoppingList();
+}
+
+function openSweepPicker(sweeps, url){
+  const container = document.getElementById('sweep-picker-options');
+  container.innerHTML = '';
+  sweeps.forEach((sw, idx)=>{
+    const option = document.createElement('div');
+    option.className = 'sweep-option';
+    const ageLabel = idx === 0 ? 'Latest' : idx === 1 ? '2nd latest' : '3rd latest';
+    option.innerHTML = `
+      <div class="sweep-option-top">
+        <div class="sweep-option-scope">${sw.scope || 'All stores'}</div>
+        <div class="sweep-option-age">${ageLabel}</div>
+      </div>
+      <div class="sweep-option-meta">📅 ${sw.date} · ${sw.time} · By <strong>${sw.by}</strong></div>
+      <div class="sweep-option-counts">✓ ${sw.itemsChecked} items checked · ${sw.itemsNeeded} needed</div>`;
+    option.onclick = () => {
+      closeSweepPicker();
+      currentSweepMeta = sw;
+      _fetchStockAndRender(url);
+    };
+    container.appendChild(option);
+  });
+  document.getElementById('sweep-picker-modal').classList.add('active');
+}
+
+function closeSweepPicker(){
+  document.getElementById('sweep-picker-modal').classList.remove('active');
+}
+
+function showSweepPickerAgain(url){
+  // Re-fetch last 3 sweeps and re-open picker
+  if(!url){ return; }
+  androidSafeGet(`${url}?action=lastsweep`).then(json=>{
+    const sweeps = json.sweeps || [];
+    if(sweeps.length > 0) openSweepPicker(sweeps, url);
+  }).catch(()=>{});
+}
+
+function _fetchStockAndRender(url){
+  const scroll = document.getElementById('shop-scroll');
+  scroll.innerHTML = '<div style="text-align:center;padding:48px 24px;color:var(--charcoal-mid);font-size:15px;font-weight:600;">Loading stock data…</div>';
+  androidSafeGet(`${url}?action=stock`).then(json=>{
+    if(json.stock && Object.keys(json.stock).length > 0){
+      // Load Sheet stock into state in-memory only — don't persist
+      Object.entries(json.stock).forEach(([id, s]) => {
+        state[id] = { qty: s.qty, note: s.note || '', forceBuy: false };
+      });
+      if(localStorage.getItem(KEY_SWEEP) === null){
+        localStorage.setItem(KEY_SWEEP, 'false');
+      }
+    }
+  }).catch(()=>{}).finally(()=>{
+    renderShoppingList();
+  });
 }
 function renderShoppingList(){
   const scroll=document.getElementById('shop-scroll');
@@ -1907,6 +2008,20 @@ function renderShoppingList(){
   if(totalNeed===0){
     scroll.innerHTML=`<div class="empty-shop"><div class="icon">✅</div><h3>All stocked up!</h3><p>Nothing needs buying right now. All checked items are in stock.</p></div>`;
     return;
+  }
+
+  // v15: "Last checked by" banner — shown when viewing from a second device
+  if(currentSweepMeta){
+    const url = localStorage.getItem(KEY_URL);
+    const infoBanner = document.createElement('div');
+    infoBanner.className = 'sweep-info-banner';
+    infoBanner.innerHTML = `
+      <div class="sweep-info-text">
+        Last checked by <strong>${currentSweepMeta.by}</strong><br>
+        📅 ${currentSweepMeta.date} · ${currentSweepMeta.time} · <strong>${currentSweepMeta.scope || 'All stores'}</strong>
+      </div>
+      <div class="sweep-info-change" onclick="showSweepPickerAgain('${url}')">Change sweep</div>`;
+    scroll.appendChild(infoBanner);
   }
 
   // Sweep status header — scoped to the stores selected for this sweep
