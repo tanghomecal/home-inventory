@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v20</title>
+<title>Home Inventory v21</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -2228,7 +2228,14 @@ function renderShoppingList(){
       empty.textContent='✓ Nothing needed';
       body.appendChild(empty);
     } else {
-      items.sort((a,b)=>(b.must?1:0)-(a.must?1:0));
+      items.sort((a,b)=>{
+        const qA = (state[a.id]||{}).qty ?? 0;
+        const qB = (state[b.id]||{}).qty ?? 0;
+        const zeroA = qA === 0 ? 0 : 1;
+        const zeroB = qB === 0 ? 0 : 1;
+        if(zeroA !== zeroB) return zeroA - zeroB;  // zero-qty first
+        return a.name.localeCompare(b.name);        // then alphabetical within each group
+      });
       const listWrap=document.createElement('div');
       listWrap.style.cssText=`border:1.5px solid ${border};border-top:none;border-radius:0 0 12px 12px;overflow:hidden;`;
       items.forEach((item,idx)=>{
