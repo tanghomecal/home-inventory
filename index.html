@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v19</title>
+<title>Home Inventory v20</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -2077,14 +2077,10 @@ function renderShoppingList(){
   const lists = { Supermarket:[], Online:[], 'Wet Market':[] };
   ALL_ITEMS.forEach(item=>{
     const s=state[item.id]||{};
-    // Add to shopping list if:
-    //   - must-check item AND qty has been recorded (always show after sweep regardless of stock level)
-    //   - OR qty checked AND (at/below min stock OR forceBuy flag set)
-    const minStock = item.min || 0;
-    const forced = !!(s.forceBuy);
-    if(s.qty===null) return;              // never add unchecked items
-    const isMustChecked = item.must;     // must-check items always appear after sweep
-    if(!isMustChecked && !forced && s.qty > minStock) return; // not must, not forced, above threshold — skip
+    if(s.qty===null) return;  // never add unchecked items (qty must be a recorded number)
+    // Must-check items: always appear if checked
+    // Non-must items: appear if forceBuy OR qty was deliberately recorded (any number)
+    // (colour/badge in the list will reflect whether stock is low or ok)
     const store = item.store||'Supermarket';
     const target = store==='Online'?'Online': store==='Wet Market'?'Wet Market':'Supermarket';
     lists[target].push({...item});
@@ -2343,11 +2339,7 @@ function shareList(){
   const lists={Supermarket:[],Online:[],'Wet Market':[]};
   ALL_ITEMS.forEach(item=>{
     const s=state[item.id]||{};
-    const minS2=item.min||0;
-    const forced2=!!(s.forceBuy);
-    if(s.qty===null) return;
-    const isMustChecked2 = item.must; // must-check items always appear
-    if(!isMustChecked2 && !forced2 && s.qty > minS2) return;
+    if(s.qty===null) return;  // only items with a recorded qty
     const store=item.store||'Supermarket';
     const target=store==='Online'?'Online':store==='Wet Market'?'Wet Market':'Supermarket';
     lists[target].push(item);
