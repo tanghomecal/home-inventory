@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v17</title>
+<title>Home Inventory v18</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -887,6 +887,7 @@ function buildRoomsFromItems(items) {
       must:  item.must,
       store: item.store,
       notes: item.notes,
+      min:   item.min || 0,
     });
   });
 
@@ -1668,9 +1669,19 @@ async function tryFinishRoom(){
   goHome();
   updateActionBar();
 
-  // Sync to Sheet after navigation (non-blocking)
+  // Sync stock to Sheet after navigation (non-blocking) — always, every room
   syncToSheet().catch(()=>{});
-  logSweepHistory([room.name], checked, needed).catch(()=>{});
+
+  // Only log to Sweep History when the entire sweep is complete
+  // (per-room logging causes duplicate entries in the picker on the second device)
+  if (allDone) {
+    let totalChecked = 0, totalNeeded = 0;
+    ALL_ITEMS.forEach(i => {
+      const s = state[i.id]||{};
+      if(s.qty !== null){ totalChecked++; if(s.qty < 1) totalNeeded++; }
+    });
+    logSweepHistory(ROOMS.map(r => r.name), totalChecked, totalNeeded, 'Complete').catch(()=>{});
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1986,16 +1997,23 @@ function _fetchStockAndRender(url){
     : `${url}?action=stock`;
   androidSafeGet(endpoint).then(json=>{
     const stockData = json.stock || json.snapshot || {};
+    // Always mark that a sweep has been seen on this device so the
+    // "No check done yet" guard doesn't fire on the second device
+    if(localStorage.getItem(KEY_SWEEP) === null){
+      localStorage.setItem(KEY_SWEEP, 'false');
+    }
     if(Object.keys(stockData).length > 0){
       // Load into state in-memory only — never persist to localStorage
       Object.entries(stockData).forEach(([id, s]) => {
         state[id] = { qty: s.qty, note: s.note || '', forceBuy: false };
       });
-      if(localStorage.getItem(KEY_SWEEP) === null){
-        localStorage.setItem(KEY_SWEEP, 'false');
-      }
     }
-  }).catch(()=>{}).finally(()=>{
+  }).catch(()=>{
+    // Even on failure, mark sweep as seen so we don't show "No check done yet"
+    if(currentSweepMeta && localStorage.getItem(KEY_SWEEP) === null){
+      localStorage.setItem(KEY_SWEEP, 'false');
+    }
+  }).finally(()=>{
     renderShoppingList();
   });
 }
@@ -2006,8 +2024,10 @@ function renderShoppingList(){
   // Check if a sweep has ever been started
   const sweepEverStarted = localStorage.getItem(KEY_SWEEP) !== null;
   const anyChecked = ALL_ITEMS.some(i => (state[i.id]||{}).qty !== null);
+  // Also pass if the user selected a sweep from the picker (second device flow)
+  const viewingRemoteSweep = !!currentSweepMeta;
 
-  if (!sweepEverStarted && !anyChecked) {
+  if (!sweepEverStarted && !anyChecked && !viewingRemoteSweep) {
     scroll.innerHTML=`<div class="empty-shop">
       <div class="icon">📋</div>
       <h3>No check done yet</h3>
