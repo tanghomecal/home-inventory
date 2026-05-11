@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v24</title>
+<title>Home Inventory v25</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -399,7 +399,7 @@
 <div id="view-home" class="view active">
   <div class="home-hero">
     <div class="eyebrow">Home Inventory</div>
-    <h1>Stock Check <span style="font-size:14px;font-weight:600;color:var(--terra);opacity:0.7;vertical-align:middle;letter-spacing:0.5px;">v23</span></h1>
+    <h1>Stock Check <span id="app-version-badge" style="font-size:14px;font-weight:600;color:var(--terra);opacity:0.7;vertical-align:middle;letter-spacing:0.5px;"></span></h1>
     <div class="subtitle" id="hero-subtitle">Connect to begin</div>
     <div class="home-hero-actions">
       <div id="sync-badge" class="sync-badge synced" onclick="manualSync()">✓ Synced</div>
@@ -619,6 +619,7 @@
 // ═══════════════════════════════════════════════════════════
 // CONSTANTS & STATE
 // ═══════════════════════════════════════════════════════════
+const APP_VERSION  = 'v25';
 const KEY_STATE    = 'inv_state_v4';
 const KEY_ITEMS    = 'inv_items_v4';
 const KEY_URL      = 'inv_webAppUrl';
@@ -652,6 +653,7 @@ let showAllItems = false;
 // BOOT
 // ═══════════════════════════════════════════════════════════
 async function boot() {
+  document.getElementById('app-version-badge').textContent = APP_VERSION;
   loadLocalState();
   loadSettings();
 
@@ -2249,7 +2251,19 @@ function renderShoppingList(){
       });
       const listWrap=document.createElement('div');
       listWrap.style.cssText=`border:1.5px solid ${border};border-top:none;border-radius:0 0 12px 12px;overflow:hidden;`;
+      let lastSubcat = null;
       items.forEach((item,idx)=>{
+        // Render subcategory heading when subcat changes
+        const thisSubcat = item.subcat || '';
+        if(thisSubcat !== lastSubcat) {
+          lastSubcat = thisSubcat;
+          if(thisSubcat) {
+            const subcatHdr = document.createElement('div');
+            subcatHdr.style.cssText=`background:var(--blush);border-bottom:1px solid var(--blush-mid);padding:7px 14px;font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--terra);`;
+            subcatHdr.textContent = thisSubcat;
+            listWrap.appendChild(subcatHdr);
+          }
+        }
         globalItemNum++;
         const itemNum = globalItemNum;
         const note=(state[item.id]||{}).note;
