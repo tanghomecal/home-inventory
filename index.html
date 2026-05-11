@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v21</title>
+<title>Home Inventory v24</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -399,7 +399,7 @@
 <div id="view-home" class="view active">
   <div class="home-hero">
     <div class="eyebrow">Home Inventory</div>
-    <h1>Stock Check</h1>
+    <h1>Stock Check <span style="font-size:14px;font-weight:600;color:var(--terra);opacity:0.7;vertical-align:middle;letter-spacing:0.5px;">v23</span></h1>
     <div class="subtitle" id="hero-subtitle">Connect to begin</div>
     <div class="home-hero-actions">
       <div id="sync-badge" class="sync-badge synced" onclick="manualSync()">✓ Synced</div>
@@ -2092,7 +2092,7 @@ function renderShoppingList(){
     return i.must&&s.qty!==null&&s.qty<1;
   }).length;
 
-  document.getElementById('shop-sub-text').textContent=`${totalNeed} items needed · ${totalMust} must-haves`;
+  document.getElementById('shop-sub-text').textContent=`${totalNeed} items on list`;
 
   if(totalNeed===0){
     scroll.innerHTML=`<div class="empty-shop"><div class="icon">✅</div><h3>All stocked up!</h3><p>Nothing needs buying right now. All checked items are in stock.</p></div>`;
@@ -2174,7 +2174,7 @@ function renderShoppingList(){
   // Grand summary
   const sum=document.createElement('div'); sum.className='shop-summary';
   sum.innerHTML=`
-    <div class="shop-summary-stat red"><div class="n">${totalNeed}</div><div class="l">Total Items</div></div>
+    <div class="shop-summary-stat red"><div class="n">${totalNeed}</div><div class="l">On List</div></div>
     <div class="shop-summary-stat"><div class="n">${lists.Supermarket.length}</div><div class="l">Supermarket</div></div>
     <div class="shop-summary-stat"><div class="n">${lists.Online.length}</div><div class="l">Online</div></div>
     <div class="shop-summary-stat"><div class="n">${lists['Wet Market'].length}</div><div class="l">Wet Market</div></div>`;
@@ -2186,6 +2186,8 @@ function renderShoppingList(){
     { key:'Online',       icon:'💻', color:'#1A56BB', bg:'#E8F0FE', border:'#1A56BB33' },
     { key:'Wet Market',   icon:'🥬', color:'#C47A2A', bg:'#FFF8E1', border:'#C47A2A33' },
   ];
+
+  let globalItemNum = 0;  // running number across all store sections
 
   sections.forEach(({key,icon,color,bg,border})=>{
     const items=lists[key];
@@ -2211,7 +2213,7 @@ function renderShoppingList(){
       <span style="font-size:22px;">${icon}</span>
       <div style="flex:1">
         <div style="font-size:15px;font-weight:800;color:${color};">${key}</div>
-        <div style="font-size:12px;color:var(--mid);font-weight:500;">${items.length} item${items.length!==1?'s':''} needed</div>
+        <div style="font-size:12px;color:var(--mid);font-weight:500;">${items.length} item${items.length!==1?'s':''} on list</div>
         ${uncheckedRoomsForStore.length>0?`<div class="unchecked-rooms-badge">⚠️ ${uncheckedRoomsForStore.join(', ')} not yet checked</div>`:''}
       </div>
       ${items.filter(i=>i.must).length>0?`<div style="background:#FFF8E1;color:#C47A2A;border:1.5px solid #F5C870;font-size:12px;font-weight:800;padding:4px 10px;border-radius:20px;margin-right:6px;">★ ${items.filter(i=>i.must).length} verified</div>`:''}
@@ -2229,16 +2231,27 @@ function renderShoppingList(){
       body.appendChild(empty);
     } else {
       items.sort((a,b)=>{
-        const qA = (state[a.id]||{}).qty ?? 0;
-        const qB = (state[b.id]||{}).qty ?? 0;
-        const zeroA = qA === 0 ? 0 : 1;
-        const zeroB = qB === 0 ? 0 : 1;
-        if(zeroA !== zeroB) return zeroA - zeroB;  // zero-qty first
-        return a.name.localeCompare(b.name);        // then alphabetical within each group
+        // (1) Sub-category alphabetical first
+        const scA = (a.subcat||'').toLowerCase();
+        const scB = (b.subcat||'').toLowerCase();
+        if(scA !== scB) return scA.localeCompare(scB);
+        // (2) Must-haves before non-must within same subcat
+        const mA = a.must ? 0 : 1;
+        const mB = b.must ? 0 : 1;
+        if(mA !== mB) return mA - mB;
+        // (3) qty=0 alphabetical, then (4) non-zero qty alphabetical, then (5) others
+        const qA = (state[a.id]||{}).qty;
+        const qB = (state[b.id]||{}).qty;
+        const tierA = qA === 0 ? 0 : (qA !== null && qA !== undefined) ? 1 : 2;
+        const tierB = qB === 0 ? 0 : (qB !== null && qB !== undefined) ? 1 : 2;
+        if(tierA !== tierB) return tierA - tierB;
+        return a.name.localeCompare(b.name);
       });
       const listWrap=document.createElement('div');
       listWrap.style.cssText=`border:1.5px solid ${border};border-top:none;border-radius:0 0 12px 12px;overflow:hidden;`;
       items.forEach((item,idx)=>{
+        globalItemNum++;
+        const itemNum = globalItemNum;
         const note=(state[item.id]||{}).note;
         const row=document.createElement('div');
         row.className='shop-item'+(item.must?' must-shop':'');
@@ -2265,6 +2278,7 @@ function renderShoppingList(){
           <div class="shop-check" id="shopcheck-${item.id}" onclick="toggleShopCheck('${item.id}')"></div>
           <div style="flex:1;min-width:0;">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
+              <span style="font-size:11px;font-weight:800;font-family:var(--mono);color:var(--mid);background:var(--blush);border:1.5px solid var(--blush-mid);padding:1px 6px;border-radius:6px;flex-shrink:0;">${itemNum}</span>
               <span class="shop-item-name">${item.name}</span>
               ${credLabel}
             </div>
