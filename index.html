@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v26</title>
+<title>Home Inventory v27</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -389,6 +389,43 @@
   }
   /* Subcategory hidden in must-only mode (no must items in it) */
   .subcat-hidden-in-must-mode{display:none!important;}
+
+  /* ── v27: PRE-SHOPPING CHECKLIST QTY STEPPER ── */
+  .psc-qty-row{display:flex;align-items:center;gap:8px;margin-top:10px;}
+  .psc-qty-label{font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--mid);}
+  .psc-stepper{display:flex;align-items:center;background:var(--blush);border:1.5px solid var(--blush-mid);border-radius:10px;overflow:hidden;}
+  .psc-step-btn{width:38px;height:38px;border:none;background:transparent;font-size:20px;font-weight:700;color:var(--terra);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.1s;}
+  .psc-step-btn:active{background:var(--blush-mid);}
+  .psc-step-num{min-width:40px;text-align:center;font-size:20px;font-weight:800;font-family:var(--mono);color:var(--charcoal);}
+  .psc-confirm-btn{flex:1;padding:10px 14px;border:none;border-radius:10px;background:var(--sage);color:white;font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;transition:all 0.15s;}
+  .psc-confirm-btn:active{transform:scale(0.97);}
+  .psc-confirm-btn.confirmed{background:var(--sage-dark);color:white;}
+  .psc-confirm-btn.confirmed::before{content:'✓ ';}
+  .shop-item.psc-confirmed{opacity:0.6;border-left:4px solid var(--sage);}
+
+  /* ── v27: SHOPPING VIEW TAB BAR ── */
+  .shop-tab-bar{display:flex;background:var(--blush);border-bottom:1.5px solid var(--blush-mid);}
+  .shop-tab{flex:1;padding:12px 8px;border:none;background:transparent;font-family:var(--font);font-size:13px;font-weight:700;color:var(--mid);cursor:pointer;border-bottom:3px solid transparent;transition:all 0.15s;}
+  .shop-tab.active{color:var(--sage-dark);border-bottom-color:var(--sage-dark);background:white;}
+
+  /* ── v27: FINAL LIST PANEL ── */
+  .final-list-empty{text-align:center;padding:48px 24px;}
+  .final-list-empty .icon{font-size:48px;margin-bottom:12px;}
+  .final-list-empty p{font-size:14px;color:var(--mid);font-weight:500;line-height:1.6;}
+  .final-item{display:flex;align-items:center;gap:12px;padding:13px 14px;background:var(--white);border-radius:var(--radius-sm);margin-bottom:6px;border:1.5px solid var(--blush-mid);box-shadow:var(--shadow-sm);}
+  .final-item-qty{min-width:44px;height:44px;background:var(--sage-light);border:1.5px solid var(--sage-mid);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;font-family:var(--mono);color:var(--sage-dark);flex-shrink:0;}
+  .final-item-name{font-size:15px;font-weight:700;color:var(--charcoal);flex:1;}
+  .final-item-subcat{font-size:11px;color:var(--mid);font-weight:500;margin-top:2px;}
+  .final-subcat-hdr{font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--terra);background:var(--blush);border-top:1px solid var(--blush-mid);border-bottom:1px solid var(--blush-mid);padding:9px 14px;margin-top:10px;}
+  .final-generate-btn{width:100%;padding:16px;border:none;border-radius:var(--radius);background:linear-gradient(135deg,var(--sage),var(--sage-dark));color:white;font-family:var(--font);font-size:16px;font-weight:800;cursor:pointer;box-shadow:0 6px 20px rgba(90,122,108,0.3);margin-top:14px;}
+  .final-generate-btn:active{transform:scale(0.98);}
+  .final-save-banner{background:var(--sage-light);border:1.5px solid var(--sage-mid);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;}
+  .final-save-banner .fsb-text{flex:1;font-size:13px;font-weight:600;color:var(--sage-dark);}
+  .final-save-banner .fsb-time{font-size:11px;color:var(--mid);font-weight:500;margin-top:2px;}
+  .final-list-picker-opt{padding:14px 16px;border:1.5px solid var(--blush-mid);border-radius:var(--radius-sm);margin-bottom:8px;cursor:pointer;transition:background 0.15s;}
+  .final-list-picker-opt:active{background:var(--blush);}
+  .final-list-picker-opt .flp-title{font-size:14px;font-weight:800;color:var(--charcoal);}
+  .final-list-picker-opt .flp-meta{font-size:12px;color:var(--mid);font-weight:500;margin-top:2px;}
 </style>
 </head>
 <body>
@@ -549,15 +586,31 @@
     <div class="header-row">
       <button class="back-btn" onclick="goHome()">←</button>
       <div class="header-title">
-        <div class="header-h2">Shopping List</div>
+        <div class="header-h2" id="shop-view-title">Pre-Shopping Checklist</div>
         <div class="header-sub" id="shop-sub-text">—</div>
       </div>
     </div>
   </div>
+  <!-- v27: Tab bar to switch between Pre-Shopping Checklist and Final List -->
+  <div class="shop-tab-bar">
+    <button class="shop-tab active" id="tab-prechecklist" onclick="switchShopTab('prechecklist')">📋 Pre-Shopping</button>
+    <button class="shop-tab" id="tab-finallist" onclick="switchShopTab('finallist')">✅ Final List</button>
+  </div>
   <div class="shop-scroll" id="shop-scroll"></div>
   <div class="shop-footer">
     <button class="back-home-btn" onclick="goHome()">← Home</button>
-    <button class="share-btn" onclick="shareList()">Share 📤</button>
+    <button class="share-btn" id="shop-share-btn" onclick="shareCurrentView()">Share 📤</button>
+  </div>
+</div>
+
+<!-- ══════════ FINAL LIST PICKER MODAL ══════════ -->
+<div class="sweep-picker-overlay" id="final-list-picker-modal">
+  <div class="sweep-picker-sheet">
+    <div class="sweep-picker-handle"></div>
+    <div class="sweep-picker-title">Load a Saved Final List</div>
+    <div class="sweep-picker-sub">Choose a previously saved final shopping list</div>
+    <div id="final-list-picker-options"></div>
+    <button class="sweep-cancel-btn" onclick="closeFinalListPicker()">Cancel</button>
   </div>
 </div>
 
@@ -619,7 +672,7 @@
 // ═══════════════════════════════════════════════════════════
 // CONSTANTS & STATE
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION  = 'v26';;
+const APP_VERSION  = 'v27';
 const KEY_STATE    = 'inv_state_v4';
 const KEY_ITEMS    = 'inv_items_v4';
 const KEY_URL      = 'inv_webAppUrl';
@@ -633,6 +686,8 @@ const KEY_SWEEP_START = 'inv_sweepStart';   // timestamp when current sweep star
 const KEY_USERS    = 'inv_users';         // cached user list from Sheet
 const KEY_LAST_SYNC = 'inv_lastSync';      // timestamp of last successful sync
 const KEY_BUY_QTYS  = 'inv_buyQtys';       // {itemId: buyQty} set by shopping list user
+const KEY_FINAL_LIST = 'inv_finalList';     // {listId, created, items:[{id,name,subcat,store,qty,note}]}
+const KEY_FINAL_LIST_ID = 'inv_finalListId'; // active final list ID
 
 // Item data — loaded from Google Sheets (no hardcoded items)
 let ROOMS     = [];
@@ -648,6 +703,9 @@ let buyQtysCache    = {};  // buy qtys loaded from Sheet when shopping list open
 
 // v12: per-room "show all items" toggle (default: must-only when sweep active)
 let showAllItems = false;
+// v27: final shopping list state
+let finalListCache = {};   // {itemId: qty} — items confirmed for final list this session
+let finalListView  = false; // true = showing final list panel within shopping view
 
 // ═══════════════════════════════════════════════════════════
 // BOOT
@@ -1337,7 +1395,7 @@ function renderHome() {
   const sweepActiveNow = localStorage.getItem(KEY_SWEEP) === 'true';
 
   ROOMS.forEach(room=>{
-    let rt=0,rc=0,rn=0,mustUnc=0;
+    let rt=0,rc=0,rn=0,mustUnc=0,hasScopedMust=false;
     Object.values(room.subcats).forEach(items=>items.forEach(item=>{
       rt++;
       const s=state[item.id];
@@ -1345,7 +1403,10 @@ function renderHome() {
       else if(item.must){rn++;}
       // mustUnc only counts ★ items in scope — so the warning is relevant to this sweep
       const inScope = !sweepActiveNow || homeScope.length===0 || homeScope.includes(item.store||'Supermarket');
-      if(item.must && inScope && !(s&&s.qty!==null)) mustUnc++;
+      if(item.must && inScope){
+        hasScopedMust = true;
+        if(!(s&&s.qty!==null)) mustUnc++;
+      }
     }));
     const pct=rt>0?Math.round(rc/rt*100):0;
     let bClass='unchecked',bText=`${rt} items`;
@@ -1358,6 +1419,10 @@ function renderHome() {
     const scopeSuffix = mustUnc>0 && sweepActiveNow && homeScope.length>0
       ? ` (${homeScope.join('+')})`
       : '';
+    // v27: if sweep is active and this room has NO in-scope must items, show "Optional" indicator
+    const optionalBadge = sweepActiveNow && !hasScopedMust && !isDone
+      ? `<div style="font-size:11px;color:var(--mid);font-weight:600;margin-top:4px;">No ★ required for ${homeScope.join('+')} — optional</div>`
+      : '';
     const doneStrip = isDone
       ? `<div class="room-done-strip visible">✓ Done — ${rc} of ${rt} items checked · ${rn>0?rn+' needed':'all stocked'}</div>`
       : '';
@@ -1367,6 +1432,7 @@ function renderHome() {
         <div class="room-info">
           <div class="room-name">${room.name}</div>
           <div class="room-meta">${rt} items · ${pct}% checked${mustUnc>0?` · ⚠️ ${mustUnc} ★ unchecked${scopeSuffix}`:''}</div>
+          ${optionalBadge}
         </div>
         <div class="room-badge ${bClass}">${bText}</div>
       </div>
@@ -1636,6 +1702,8 @@ function updateDoneButton(){
   const btn=document.getElementById('done-room-btn');
   const reason=document.getElementById('lock-reason');
   const warn=document.getElementById('mandatory-warning');
+  const scope = getSweepScope();
+  const scopeLabel = scope.length > 0 ? ` (${scope.join('+')})` : '';
   if(unc.length===0){
     btn.className='done-room-btn unlocked';
     btn.textContent='Done with this room ✓';
@@ -1644,9 +1712,9 @@ function updateDoneButton(){
   } else {
     btn.className='done-room-btn locked';
     btn.textContent=`🔒  ${unc.length} ★ item${unc.length>1?'s':''} still need checking`;
-    reason.textContent='Please check all ★ must-have items first';
+    reason.textContent=`Check all ★ must-haves${scopeLabel} first`;
     warn.classList.add('visible');
-    document.getElementById('mandatory-warning-text').textContent=`${unc.length} must-have item${unc.length>1?'s':''} still unchecked — scroll to find pulsing amber cards`;
+    document.getElementById('mandatory-warning-text').textContent=`${unc.length} must-have item${unc.length>1?'s':''} still unchecked${scopeLabel} — scroll to find pulsing amber cards`;
   }
 }
 
@@ -2069,20 +2137,25 @@ function renderShoppingList(){
     scroll.innerHTML=`<div class="empty-shop">
       <div class="icon">📋</div>
       <h3>No check done yet</h3>
-      <p>Tap <strong>Start Check</strong> on the home screen, go through the rooms, and the shopping list will appear here based on what's out of stock.</p>
+      <p>Tap <strong>Start Check</strong> on the home screen, go through the rooms, and the pre-shopping checklist will appear here.</p>
     </div>`;
     document.getElementById('shop-sub-text').textContent='No sweep completed yet';
     return;
   }
 
-  // Split need-items into 3 stores
+  // v27: Pre-Shopping Checklist — shows:
+  //   (a) all ★ must-have items that were checked (qty !== null)
+  //   (b) all force-buy items (regardless of qty)
+  // NOTE: qty < min logic is preserved for future use but not the primary trigger here.
   const lists = { Supermarket:[], Online:[], 'Wet Market':[] };
   ALL_ITEMS.forEach(item=>{
     const s=state[item.id]||{};
-    if(s.qty===null) return;  // never add unchecked items (qty must be a recorded number)
-    // Must-check items: always appear if checked
-    // Non-must items: appear if forceBuy OR qty was deliberately recorded (any number)
-    // (colour/badge in the list will reflect whether stock is low or ok)
+    const isForceBuy = !!s.forceBuy;
+    const isCheckedMust = item.must && s.qty !== null;
+    // Future hook: qty <= min triggers buy (dormant — uncomment when menu integration lands)
+    // const minStock = item.min || 1;
+    // const isBelowMin = s.qty !== null && s.qty <= minStock;
+    if (!isCheckedMust && !isForceBuy) return;
     const store = item.store||'Supermarket';
     const target = store==='Online'?'Online': store==='Wet Market'?'Wet Market':'Supermarket';
     lists[target].push({...item});
@@ -2094,10 +2167,10 @@ function renderShoppingList(){
     return i.must&&s.qty!==null&&s.qty<1;
   }).length;
 
-  document.getElementById('shop-sub-text').textContent=`${totalNeed} items on list`;
+  document.getElementById('shop-sub-text').textContent=`${totalNeed} item${totalNeed!==1?'s':''} to review`;
 
   if(totalNeed===0){
-    scroll.innerHTML=`<div class="empty-shop"><div class="icon">✅</div><h3>All stocked up!</h3><p>Nothing needs buying right now. All checked items are in stock.</p></div>`;
+    scroll.innerHTML=`<div class="empty-shop"><div class="icon">✅</div><h3>Nothing to review!</h3><p>No must-check items were recorded and nothing was force-added. Complete a sweep first.</p></div>`;
     return;
   }
 
@@ -2293,36 +2366,33 @@ function renderShoppingList(){
         const itemNum = globalItemNum;
         const note=(state[item.id]||{}).note;
         const row=document.createElement('div');
-        row.className='shop-item'+(item.must?' must-shop':'');
+        const isAlreadyConfirmed = finalListCache[item.id] !== undefined;
+        row.className='shop-item'+(item.must?' must-shop':'')+(isAlreadyConfirmed?' psc-confirmed':'');
         row.style.cssText='border-radius:0;margin:0;'+(idx<scItems.length-1?'border-bottom:1px solid var(--blush-mid);':'');
         row.id='shoprow-'+item.id;
         const curQty = (state[item.id]||{}).qty ?? 0;
-        const invBadgeClass = curQty === 0 ? 'zero' : 'low';
-        // Load saved buy qty from cache (pre-loaded from Sheet when shopping opened)
-        const savedBuyQty = buyQtysCache[item.id] !== undefined ? buyQtysCache[item.id] : '';
         const lastQtyForItem = getLastQty(item.id);
         const lastDisplay = lastQtyForItem !== null ? lastQtyForItem : '—';
-        const minStockForItem = item.min || 0;
-        const invClass = curQty === 0 ? 'zero' : curQty <= minStockForItem ? 'low' : 'ok';
-        const hasBuyVal = savedBuyQty !== '';
-        // Credibility label — tells shopping list user how reliable the count is
+        const minStockForItem = item.min || 1;  // default min = 1
+        // Suggested qty = max(0, min - current). If force-buy with qty > min, suggest 1.
+        const suggestedQty = isAlreadyConfirmed
+          ? finalListCache[item.id]
+          : Math.max(1, minStockForItem - curQty);
+        const invClass = curQty === 0 ? 'zero' : curQty <= (item.min||1) ? 'low' : 'ok';
+        // Credibility label
         const isForcedBuy = !!(state[item.id]||{}).forceBuy;
         const credLabel = item.must
-          ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;background:#FFF8E1;color:#C47A2A;border:1.5px solid #F5C870;padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">★ VERIFIED COUNT</span>`
-          : isForcedBuy
-          ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;background:#E8F0FE;color:#1A56BB;border:1.5px solid #AABFEE;padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">🛒 REQUESTED</span>`
-          : `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;background:var(--blush);color:var(--mid);border:1.5px solid var(--blush-mid);padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">REPORTED</span>`;
+          ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;background:#FFF8E1;color:#C47A2A;border:1.5px solid #F5C870;padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">★ VERIFIED</span>`
+          : `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;background:#E8F0FE;color:#1A56BB;border:1.5px solid #AABFEE;padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">🛒 REQUESTED</span>`;
 
         row.innerHTML=`
-          <div class="shop-check" id="shopcheck-${item.id}" onclick="toggleShopCheck('${item.id}')"></div>
           <div style="flex:1;min-width:0;">
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
               <span style="font-size:11px;font-weight:800;font-family:var(--mono);color:var(--mid);background:var(--blush);border:1.5px solid var(--blush-mid);padding:1px 6px;border-radius:6px;flex-shrink:0;">${itemNum}</span>
               <span class="shop-item-name">${item.name}</span>
               ${credLabel}
             </div>
-
-            <div class="shop-qty-table">
+            <div class="shop-qty-table" style="margin-bottom:10px;">
               <div class="sqt-cell cell-last">
                 <div class="sqt-label">Last</div>
                 <div class="sqt-num">${lastDisplay}</div>
@@ -2331,18 +2401,23 @@ function renderShoppingList(){
                 <div class="sqt-label">In Stock</div>
                 <div class="sqt-num">${curQty}</div>
               </div>
-              <div class="sqt-cell cell-buy${hasBuyVal?' has-val':''}" id="sqt-buy-${item.id}">
-                <div class="sqt-label">To Buy</div>
-                <input class="sqt-input"
-                       id="buyqty-${item.id}"
-                       type="number" min="0" inputmode="numeric"
-                       placeholder="?"
-                       value="${savedBuyQty}"
-                       onchange="saveBuyQty('${item.id}',this.value)"
-                       oninput="document.getElementById('sqt-buy-${item.id}').classList.toggle('has-val',this.value!=='');this.style.color=this.value?'var(--sage-dark)':'var(--charcoal-mid)'">
+              <div class="sqt-cell" style="background:var(--sage-light);border-color:var(--sage-mid);">
+                <div class="sqt-label">Min Stock</div>
+                <div class="sqt-num" style="color:var(--sage-dark);">${minStockForItem}</div>
               </div>
             </div>
-            ${note?`<span class="shop-note-text">📝 ${note}</span>`:''}
+            <div class="psc-qty-row">
+              <span class="psc-qty-label">To Buy:</span>
+              <div class="psc-stepper">
+                <button class="psc-step-btn" onclick="pscStep('${item.id}',-1)">−</button>
+                <span class="psc-step-num" id="psc-num-${item.id}">${suggestedQty}</span>
+                <button class="psc-step-btn" onclick="pscStep('${item.id}',1)">+</button>
+              </div>
+              <button class="psc-confirm-btn${isAlreadyConfirmed?' confirmed':''}" id="psc-confirm-${item.id}" onclick="confirmToFinalList('${item.id}','${item.name.replace(/'/g,"\\'")}','${(item.subcat||'').replace(/'/g,"\\'")}','${item.store||'Supermarket'}')">
+                ${isAlreadyConfirmed?'On Final List':'Add to Final List'}
+              </button>
+            </div>
+            ${note?`<span class="shop-note-text" style="margin-top:8px;">📝 ${note}</span>`:''}
           </div>`;
         scBody.appendChild(row);
         });  // end scItems.forEach
@@ -2371,30 +2446,307 @@ function renderShoppingList(){
     section.appendChild(body);
     scroll.appendChild(section);
   });
+
+  // v27: Generate Final List button at bottom of pre-shopping checklist
+  const confirmedCount = Object.keys(finalListCache).length;
+  const genBtn = document.createElement('button');
+  genBtn.className = 'final-generate-btn';
+  genBtn.textContent = confirmedCount > 0
+    ? `✅ Generate Final List (${confirmedCount} item${confirmedCount!==1?'s':''})`
+    : '✅ Generate Final List';
+  genBtn.style.margin = '20px 0 80px';
+  genBtn.onclick = () => { switchShopTab('finallist'); };
+  scroll.appendChild(genBtn);
 }
 
-function toggleShopCheck(itemId){
-  document.getElementById('shopcheck-'+itemId)?.classList.toggle('checked');
-  document.getElementById('shoprow-'+itemId)?.classList.toggle('checked-item');
+// ── v27: STEPPER CONTROL ──────────────────────────────────────────────────────
+function pscStep(itemId, delta){
+  const el = document.getElementById('psc-num-'+itemId);
+  if(!el) return;
+  let val = parseInt(el.textContent, 10) || 0;
+  val = Math.max(0, val + delta);
+  el.textContent = val;
+  // If item was already confirmed, update the cache immediately
+  if(finalListCache[itemId] !== undefined){
+    finalListCache[itemId] = val;
+  }
 }
 
-function saveBuyQty(itemId, val) {
-  const num = val.trim();
-  const qty = (num === '' || isNaN(num)) ? null : Number(num);
+// ── v27: CONFIRM ITEM TO FINAL LIST ──────────────────────────────────────────
+function confirmToFinalList(itemId, itemName, subcat, store){
+  const numEl = document.getElementById('psc-num-'+itemId);
+  const qty = numEl ? parseInt(numEl.textContent, 10) : 1;
+  const note = (state[itemId]||{}).note || '';
 
-  // Update local cache immediately (optimistic)
-  const local = JSON.parse(localStorage.getItem(KEY_BUY_QTYS)||'{}');
-  if(qty === null) { delete local[itemId]; delete buyQtysCache[itemId]; }
-  else { local[itemId] = qty; buyQtysCache[itemId] = qty; }
-  localStorage.setItem(KEY_BUY_QTYS, JSON.stringify(local));
+  // Toggle: if already in list remove it, else add it
+  if(finalListCache[itemId] !== undefined){
+    delete finalListCache[itemId];
+    const btn = document.getElementById('psc-confirm-'+itemId);
+    const row = document.getElementById('shoprow-'+itemId);
+    if(btn){ btn.textContent = 'Add to Final List'; btn.classList.remove('confirmed'); }
+    if(row) row.classList.remove('psc-confirmed');
+    showToast(`Removed ${itemName} from final list`);
+  } else {
+    // Store full item info for final list rendering
+    finalListCache[itemId] = qty;
+    // Save extended info in a parallel structure
+    if(!window._finalItemMeta) window._finalItemMeta = {};
+    window._finalItemMeta[itemId] = { id:itemId, name:itemName, subcat, store, note };
+    const btn = document.getElementById('psc-confirm-'+itemId);
+    const row = document.getElementById('shoprow-'+itemId);
+    if(btn){ btn.textContent = 'On Final List'; btn.classList.add('confirmed'); }
+    if(row) row.classList.add('psc-confirmed');
+    showToast(`✓ ${itemName} added — qty ${qty}`);
+  }
+  // Update generate button count
+  const confirmedCount = Object.keys(finalListCache).length;
+  const genBtn = document.querySelector('.final-generate-btn');
+  if(genBtn) genBtn.textContent = confirmedCount > 0
+    ? `✅ Generate Final List (${confirmedCount} item${confirmedCount!==1?'s':''})`
+    : '✅ Generate Final List';
+}
 
-  // Persist to Sheet in background
-  const url = localStorage.getItem(KEY_URL);
-  if(!url) return;
-  androidSafePost(url, { action:'savebuyqty', itemId, qty }).catch(e=>{
-    console.warn('saveBuyQty sync failed:', e);
-    // Already saved locally — will be picked up next time sheet loads
+// ── v27: TAB SWITCHER ─────────────────────────────────────────────────────────
+function switchShopTab(tab){
+  const tabPre  = document.getElementById('tab-prechecklist');
+  const tabFin  = document.getElementById('tab-finallist');
+  const titleEl = document.getElementById('shop-view-title');
+  const subEl   = document.getElementById('shop-sub-text');
+  finalListView = (tab === 'finallist');
+
+  tabPre.classList.toggle('active', tab==='prechecklist');
+  tabFin.classList.toggle('active', tab==='finallist');
+
+  if(tab === 'finallist'){
+    titleEl.textContent = 'Final Shopping List';
+    renderFinalList();
+  } else {
+    titleEl.textContent = 'Pre-Shopping Checklist';
+    // Re-render checklist to reflect any confirmed state changes
+    renderShoppingList();
+    const totalItems = ALL_ITEMS.filter(i=>{
+      const s=state[i.id]||{};
+      return (i.must && s.qty!==null) || !!s.forceBuy;
+    }).length;
+    subEl.textContent = `${totalItems} item${totalItems!==1?'s':''} to review`;
+  }
+}
+
+// ── v27: FINAL LIST RENDERER ──────────────────────────────────────────────────
+function renderFinalList(){
+  const scroll = document.getElementById('shop-scroll');
+  scroll.innerHTML = '';
+  const subEl = document.getElementById('shop-sub-text');
+
+  const confirmedIds = Object.keys(finalListCache);
+  const meta = window._finalItemMeta || {};
+
+  // Rebuild meta for items already in cache from a previous session load
+  // (meta is populated when user confirms items; on page reload we rebuild from ALL_ITEMS)
+  if(!window._finalItemMeta){
+    window._finalItemMeta = {};
+    ALL_ITEMS.forEach(item => {
+      if(finalListCache[item.id] !== undefined){
+        window._finalItemMeta[item.id] = {
+          id: item.id, name: item.name, subcat: item.subcat||'',
+          store: item.store||'Supermarket', note: (state[item.id]||{}).note||''
+        };
+      }
+    });
+  }
+
+  // Show any previously saved final list banner
+  const savedFinalLists = _getSavedFinalLists();
+  if(savedFinalLists.length > 0){
+    const latest = savedFinalLists[savedFinalLists.length-1];
+    const banner = document.createElement('div');
+    banner.className = 'final-save-banner';
+    banner.innerHTML = `
+      <div class="fsb-text">
+        <div>Last saved: ${latest.label}</div>
+        <div class="fsb-time">${latest.itemCount} items · ${latest.created}</div>
+      </div>
+      <button onclick="openFinalListPicker()" style="border:none;background:var(--sage);color:white;padding:8px 12px;border-radius:8px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;">Load</button>`;
+    scroll.appendChild(banner);
+  }
+
+  if(confirmedIds.length === 0){
+    scroll.innerHTML += `<div class="final-list-empty">
+      <div class="icon">📝</div>
+      <p>No items added yet.<br>Go back to the Pre-Shopping tab and tap <strong>Add to Final List</strong> on each item you need to buy.</p>
+    </div>`;
+    subEl.textContent = '0 items confirmed';
+    return;
+  }
+
+  // Build list of confirmed items with full metadata
+  const allConfirmed = confirmedIds.map(id => {
+    const item = ITEM_MAP[id] || meta[id] || { id, name: id, subcat:'', store:'Supermarket', note:'' };
+    return { ...item, qty: finalListCache[id], note: (state[id]||{}).note || item.note || '' };
   });
+
+  // Sort: by subcategory alphabetically, then by name
+  allConfirmed.sort((a,b) => {
+    const sc = (a.subcat||'').localeCompare(b.subcat||'');
+    if(sc !== 0) return sc;
+    return a.name.localeCompare(b.name);
+  });
+
+  subEl.textContent = `${confirmedIds.length} item${confirmedIds.length!==1?'s':''} to buy`;
+
+  // Group by subcat
+  const subcatOrder = [];
+  const subcatMap = {};
+  allConfirmed.forEach(item => {
+    const sc = item.subcat || '';
+    if(!subcatMap[sc]){ subcatMap[sc]=[]; subcatOrder.push(sc); }
+    subcatMap[sc].push(item);
+  });
+
+  subcatOrder.forEach(sc => {
+    if(sc){
+      const hdr = document.createElement('div');
+      hdr.className = 'final-subcat-hdr';
+      hdr.textContent = sc;
+      scroll.appendChild(hdr);
+    }
+    subcatMap[sc].forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'final-item';
+      row.innerHTML = `
+        <div class="final-item-qty">${item.qty}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="final-item-name">${item.name}</div>
+          ${item.note?`<div class="final-item-subcat">📝 ${item.note}</div>`:''}
+        </div>
+        <button onclick="removeFinalItem('${item.id}')" style="border:none;background:var(--terra-light);color:var(--terra);width:32px;height:32px;border-radius:8px;font-size:16px;cursor:pointer;flex-shrink:0;">✕</button>`;
+      scroll.appendChild(row);
+    });
+  });
+
+  // Save + Share button area
+  const actionsWrap = document.createElement('div');
+  actionsWrap.style.cssText = 'display:flex;gap:10px;margin:16px 0 80px;';
+  actionsWrap.innerHTML = `
+    <button onclick="saveFinalListToSheet()" style="flex:1;padding:16px;border:none;border-radius:var(--radius);background:var(--charcoal);color:white;font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer;">💾 Save List</button>
+    <button onclick="shareFinalList()" style="flex:1;padding:16px;border:none;border-radius:var(--radius);background:linear-gradient(135deg,var(--sage),var(--sage-dark));color:white;font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer;">Share 📤</button>`;
+  scroll.appendChild(actionsWrap);
+}
+
+function removeFinalItem(itemId){
+  delete finalListCache[itemId];
+  // Also un-confirm the button on the pre-checklist if it's still in DOM
+  const btn = document.getElementById('psc-confirm-'+itemId);
+  const row = document.getElementById('shoprow-'+itemId);
+  if(btn){ btn.textContent='Add to Final List'; btn.classList.remove('confirmed'); }
+  if(row) row.classList.remove('psc-confirmed');
+  renderFinalList();
+  showToast('Item removed from final list');
+}
+
+// ── v27: SAVE FINAL LIST TO SHEET ─────────────────────────────────────────────
+async function saveFinalListToSheet(){
+  const url = localStorage.getItem(KEY_URL);
+  const confirmed = Object.keys(finalListCache);
+  if(!confirmed.length){ showToast('Nothing to save!'); return; }
+  if(!url){ showToast('Connect to Google Sheets first'); return; }
+
+  const meta = window._finalItemMeta || {};
+  const now = new Date();
+  const label = now.toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  const listId = 'FL_' + now.toISOString().replace(/[:.]/g,'').substring(0,15);
+  const user = localStorage.getItem(KEY_USER) || 'Helper';
+
+  const items = confirmed.map(id => {
+    const item = ITEM_MAP[id] || meta[id] || {};
+    return {
+      itemId:  id,
+      name:    item.name  || id,
+      subcat:  item.subcat|| '',
+      store:   item.store || 'Supermarket',
+      qty:     finalListCache[id],
+      note:    (state[id]||{}).note || '',
+    };
+  });
+
+  // Save locally first
+  const localLists = _getSavedFinalLists();
+  localLists.push({ listId, label, created: label, itemCount: items.length, items });
+  localStorage.setItem(KEY_FINAL_LIST, JSON.stringify(localLists.slice(-10))); // keep last 10
+  localStorage.setItem(KEY_FINAL_LIST_ID, listId);
+
+  showToast('Saving to Sheet…');
+
+  try {
+    await androidSafePost(url, {
+      action: 'savefinallist',
+      listId, label, createdBy: user,
+      createdAt: now.toISOString(),
+      items
+    });
+    showToast('✓ Final list saved!');
+  } catch(e) {
+    console.warn('saveFinalList sheet sync failed:', e);
+    showToast('Saved locally (sheet sync failed)');
+  }
+  renderFinalList(); // refresh to show updated save banner
+}
+
+function _getSavedFinalLists(){
+  try { return JSON.parse(localStorage.getItem(KEY_FINAL_LIST)||'[]'); }
+  catch(e){ return []; }
+}
+
+function openFinalListPicker(){
+  const lists = _getSavedFinalLists();
+  const container = document.getElementById('final-list-picker-options');
+  container.innerHTML = '';
+  if(!lists.length){
+    container.innerHTML = '<p style="text-align:center;color:var(--mid);padding:16px;">No saved lists yet.</p>';
+  } else {
+    [...lists].reverse().forEach(fl => {
+      const opt = document.createElement('div');
+      opt.className = 'final-list-picker-opt';
+      opt.innerHTML = `<div class="flp-title">${fl.label}</div><div class="flp-meta">${fl.itemCount} items · ${fl.created}</div>`;
+      opt.onclick = () => {
+        // Load this list into finalListCache
+        finalListCache = {};
+        window._finalItemMeta = {};
+        (fl.items||[]).forEach(i => {
+          finalListCache[i.itemId] = i.qty;
+          window._finalItemMeta[i.itemId] = i;
+        });
+        closeFinalListPicker();
+        renderFinalList();
+        showToast('Final list loaded');
+      };
+      container.appendChild(opt);
+    });
+  }
+  document.getElementById('final-list-picker-modal').classList.add('active');
+}
+
+function closeFinalListPicker(){
+  document.getElementById('final-list-picker-modal').classList.remove('active');
+}
+
+function shareFinalList(){
+  const confirmed = Object.keys(finalListCache);
+  if(!confirmed.length){ showToast('Nothing to share!'); return; }
+  const meta = window._finalItemMeta || {};
+  const items = confirmed.map(id => {
+    const item = ITEM_MAP[id] || meta[id] || { name: id, subcat:'' };
+    return `  • ${item.name}  ×${finalListCache[id]}`;
+  });
+  const text = `🛒 Final Shopping List — ${new Date().toLocaleDateString('en-AU')}\n\n${items.join('\n')}`;
+  if(navigator.share) navigator.share({title:'Final Shopping List', text});
+  else if(navigator.clipboard) navigator.clipboard.writeText(text).then(()=>showToast('Copied!'));
+  else showToast('Use Chrome Share for this feature');
+}
+
+function shareCurrentView(){
+  if(finalListView) shareFinalList();
+  else shareList();
 }
 
 function shareList(){
