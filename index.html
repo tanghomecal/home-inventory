@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v28</title>
+<title>Home Inventory v29</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -728,7 +728,7 @@
 // ═══════════════════════════════════════════════════════════
 // CONSTANTS & STATE
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION  = 'v28';
+const APP_VERSION  = 'v29';
 const KEY_STATE    = 'inv_state_v4';
 const KEY_ITEMS    = 'inv_items_v4';
 const KEY_URL      = 'inv_webAppUrl';
@@ -803,6 +803,8 @@ async function boot() {
     await attemptPendingSync(url);
     // v28: check if a sweep was completed that needs a final list (cross-device)
     await checkSweepDoneFromSheet(url);
+    // v29: auto-load the latest final list from Sheet so any device is up to date
+    await fetchLatestFinalListFromSheet(url);
   }
 }
 
@@ -1111,6 +1113,70 @@ function dismissSweepDoneBannerAndShop() {
 function dismissSweepDoneBanner() {
   // "Got it" just hides the banner for this session but keeps the acked state
   hideSweepDoneBanner();
+}
+
+// ── v29: AUTO-LOAD LATEST FINAL LIST FROM SHEET ───────────────────────────────
+// Runs on boot. Fetches the most recent saved final list from the Sheet and
+// loads it into finalListCache so any device immediately sees it in the Final
+// List tab — no manual picker needed.
+async function fetchLatestFinalListFromSheet(url) {
+  try {
+    const json = await androidSafeGet(`${url}?action=getfinallists`);
+    const lists = json.lists || [];
+    if (!lists.length) return;
+
+    // Update local cache with full list from Sheet
+    localStorage.setItem(KEY_FINAL_LIST, JSON.stringify(lists.slice(-10)));
+
+    // Load the most recent list (first in array — Sheet returns newest first)
+    const latest = lists[0];
+    if (!latest || !latest.items || !latest.items.length) return;
+
+    // Populate finalListCache and _finalItemMeta
+    finalListCache = {};
+    window._finalItemMeta = {};
+    latest.items.forEach(i => {
+      const key = i.itemId || i.id;
+      if (!key) return;
+      finalListCache[key] = i.qty;
+      window._finalItemMeta[key] = { ...i, id: key };
+    });
+
+    // Store the listId so we know which sweep this belongs to
+    localStorage.setItem(KEY_FINAL_LIST_ID, latest.listId);
+
+    // Also mark this sweep as having a final list (suppresses sweep-done banner)
+    // by checking if the latest final list's listId contains a sweep timestamp
+    // we can match — simpler: just mark KEY_FINAL_FOR_SWEEP from the latest sweep done
+    const localDone = localStorage.getItem(KEY_SWEEP_DONE);
+    if (localDone) {
+      try {
+        const doneInfo = JSON.parse(localDone);
+        // If the final list was created after the sweep, suppress the banner
+        if (doneInfo.sweepId && latest.createdAt) {
+          localStorage.setItem(KEY_FINAL_FOR_SWEEP, doneInfo.sweepId);
+          hideSweepDoneBanner();
+        }
+      } catch(e) {}
+    }
+
+    showToast('📋 Final list ready to view');
+  } catch(e) {
+    console.warn('fetchLatestFinalListFromSheet:', e);
+    // Offline — try loading from local cache silently
+    const localLists = _getSavedFinalLists();
+    if (localLists.length) {
+      const latest = localLists[localLists.length - 1];
+      finalListCache = {};
+      window._finalItemMeta = {};
+      (latest.items || []).forEach(i => {
+        const key = i.itemId || i.id;
+        if (!key) return;
+        finalListCache[key] = i.qty;
+        window._finalItemMeta[key] = { ...i, id: key };
+      });
+    }
+  }
 }
 
 async function manualSync() {
