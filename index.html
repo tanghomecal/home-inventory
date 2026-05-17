@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v29</title>
+<title>Home Inventory v30</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -728,7 +728,7 @@
 // ═══════════════════════════════════════════════════════════
 // CONSTANTS & STATE
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION  = 'v29';
+const APP_VERSION  = 'v30';
 const KEY_STATE    = 'inv_state_v4';
 const KEY_ITEMS    = 'inv_items_v4';
 const KEY_URL      = 'inv_webAppUrl';
@@ -2348,6 +2348,12 @@ function showShopping(){
     }).catch(()=>{ return []; });
 
     Promise.all([itemsPromise, buyQtyPromise, sweepsPromise]).then(([,,sweeps])=>{
+      // v29: if a final list was auto-loaded on boot, go straight to the Final List tab
+      if (Object.keys(finalListCache).length > 0) {
+        finalListView = true;
+        switchShopTab('finallist');
+        return;
+      }
       if(sweeps.length === 0){
         // No history from Sheet — fall back to local state
         _loadLocalStateAndRender();
