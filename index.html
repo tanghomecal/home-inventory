@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v30</title>
+<title>Home Inventory v31</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -457,6 +457,34 @@
   /* ── v28: AUTO-SKIP ROOM BADGE ── */
   .room-autoskip-strip{display:none;margin-top:8px;padding:6px 12px;background:#EAF5EE;border-radius:8px;font-size:12px;font-weight:700;color:#5A7A6C;text-align:center;border:1px solid #C4DDD5;}
   .room-autoskip-strip.visible{display:block;}
+
+  /* ── v31: ADD ITEM BUTTON in shopping header ── */
+  .shop-add-btn{background:var(--sage);border:none;color:white;width:36px;height:36px;border-radius:50%;font-size:22px;font-weight:300;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(90,122,108,0.35);}
+  .shop-add-btn:active{background:var(--sage-dark);transform:scale(0.93);}
+
+  /* ── v31: ADD ITEM MODAL ── */
+  .add-item-overlay{display:none;position:fixed;inset:0;background:rgba(45,45,45,0.55);z-index:1050;align-items:flex-end;}
+  .add-item-overlay.active{display:flex;}
+  .add-item-sheet{background:var(--white);width:100%;border-radius:24px 24px 0 0;padding:20px 20px 44px;animation:slideUp 0.25s ease;max-height:85vh;display:flex;flex-direction:column;}
+  .add-item-handle{width:40px;height:4px;background:var(--blush-mid);border-radius:2px;margin:0 auto 16px;}
+  .add-item-title{font-size:18px;font-weight:800;color:var(--charcoal);margin-bottom:12px;}
+  .add-item-search{display:flex;align-items:center;background:var(--rose-white);border:2px solid var(--blush-mid);border-radius:var(--radius-sm);padding:0 14px;gap:10px;margin-bottom:12px;transition:border-color 0.2s;}
+  .add-item-search:focus-within{border-color:var(--sage);}
+  .add-item-search input{flex:1;background:transparent;border:none;outline:none;font-family:var(--font);font-size:16px;color:var(--charcoal);padding:13px 0;font-weight:500;}
+  .add-item-search input::placeholder{color:#C0B0A8;}
+  .add-item-results{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  .add-item-result{display:flex;align-items:center;gap:12px;padding:13px 14px;background:var(--white);border-radius:var(--radius-sm);margin-bottom:6px;border:1.5px solid var(--blush-mid);cursor:pointer;transition:all 0.15s;}
+  .add-item-result:active{background:var(--sage-light);border-color:var(--sage-mid);}
+  .add-item-result.already-added{opacity:0.45;pointer-events:none;}
+  .add-item-result-name{font-size:15px;font-weight:700;color:var(--charcoal);flex:1;}
+  .add-item-result-name.must::after{content:' ★';color:var(--amber);font-size:12px;}
+  .add-item-result-meta{font-size:11px;color:var(--mid);margin-top:2px;font-weight:500;}
+  .add-item-result-badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px;white-space:nowrap;flex-shrink:0;}
+  .add-item-result-badge.store-super{background:var(--sage-light);color:var(--sage-dark);}
+  .add-item-result-badge.store-online{background:#E8F0FE;color:#1A56BB;}
+  .add-item-result-badge.store-wet{background:#FFF8E1;color:#C47A2A;}
+  .add-item-empty{text-align:center;padding:32px 16px;color:var(--mid);font-size:14px;font-weight:500;}
+  .add-item-cancel{width:100%;margin-top:14px;padding:15px;border:2px solid var(--blush-mid);border-radius:var(--radius);background:transparent;font-family:var(--font);font-size:15px;font-weight:700;color:var(--mid);cursor:pointer;flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -632,6 +660,7 @@
         <div class="header-h2" id="shop-view-title">Pre-Shopping Checklist</div>
         <div class="header-sub" id="shop-sub-text">—</div>
       </div>
+      <button class="shop-add-btn" id="shop-add-btn" onclick="openAddItemModal()" title="Add item to list">+</button>
     </div>
   </div>
   <!-- v27: Tab bar to switch between Pre-Shopping Checklist and Final List -->
@@ -643,6 +672,23 @@
   <div class="shop-footer">
     <button class="back-home-btn" onclick="goHome()">← Home</button>
     <button class="share-btn" id="shop-share-btn" onclick="shareCurrentView()">Share 📤</button>
+  </div>
+</div>
+
+<!-- ══════════ v31: ADD ITEM MODAL ══════════ -->
+<div class="add-item-overlay" id="add-item-overlay">
+  <div class="add-item-sheet">
+    <div class="add-item-handle"></div>
+    <div class="add-item-title">Add Item to Checklist</div>
+    <div class="add-item-search">
+      <span style="font-size:18px;color:var(--blush-dark);">🔍</span>
+      <input type="text" id="add-item-input" placeholder="Search items…" autocomplete="off" autocorrect="off" spellcheck="false" oninput="onAddItemSearch(this.value)">
+      <span style="font-size:18px;color:#C0B0A8;cursor:pointer;" id="add-item-clear" onclick="clearAddItemSearch()" style="display:none;">✕</span>
+    </div>
+    <div class="add-item-results" id="add-item-results">
+      <div class="add-item-empty">Start typing to search the item list</div>
+    </div>
+    <button class="add-item-cancel" onclick="closeAddItemModal()">Cancel</button>
   </div>
 </div>
 
@@ -728,7 +774,7 @@
 // ═══════════════════════════════════════════════════════════
 // CONSTANTS & STATE
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION  = 'v30';
+const APP_VERSION  = 'v31';
 const KEY_STATE    = 'inv_state_v4';
 const KEY_ITEMS    = 'inv_items_v4';
 const KEY_URL      = 'inv_webAppUrl';
@@ -2833,10 +2879,13 @@ function switchShopTab(tab){
   const tabFin  = document.getElementById('tab-finallist');
   const titleEl = document.getElementById('shop-view-title');
   const subEl   = document.getElementById('shop-sub-text');
+  const addBtn  = document.getElementById('shop-add-btn');
   finalListView = (tab === 'finallist');
 
   tabPre.classList.toggle('active', tab==='prechecklist');
   tabFin.classList.toggle('active', tab==='finallist');
+  // v31: only show + button on Pre-Shopping tab
+  if (addBtn) addBtn.style.display = tab === 'prechecklist' ? '' : 'none';
 
   if(tab === 'finallist'){
     titleEl.textContent = 'Final Shopping List';
@@ -3135,6 +3184,120 @@ function shareList(){
   else if(navigator.clipboard)navigator.clipboard.writeText(text).then(()=>showToast('Copied to clipboard!'));
   else showToast('Use Chrome Share for this feature');
 }
+
+// ═══════════════════════════════════════════════════════════
+// v31: ADD ITEM TO PRE-SHOPPING CHECKLIST
+// ═══════════════════════════════════════════════════════════
+// Tracks items added outside of a sweep by the shopping list user.
+// Stored as {itemId: true} — state[itemId].qty = 0, forceBuy = false.
+// Synced to Sheet via a new 'addtochecklist' POST action so other devices see it.
+
+function openAddItemModal() {
+  document.getElementById('add-item-input').value = '';
+  document.getElementById('add-item-results').innerHTML =
+    '<div class="add-item-empty">Start typing to search the item list</div>';
+  document.getElementById('add-item-overlay').classList.add('active');
+  setTimeout(() => document.getElementById('add-item-input').focus(), 300);
+}
+
+function closeAddItemModal() {
+  document.getElementById('add-item-overlay').classList.remove('active');
+}
+
+function clearAddItemSearch() {
+  document.getElementById('add-item-input').value = '';
+  onAddItemSearch('');
+}
+
+function onAddItemSearch(val) {
+  const q = val.trim().toLowerCase();
+  const container = document.getElementById('add-item-results');
+  if (!q) {
+    container.innerHTML = '<div class="add-item-empty">Start typing to search the item list</div>';
+    return;
+  }
+
+  // Items already on the checklist (checked or force-buy)
+  const alreadyOnList = new Set(
+    ALL_ITEMS
+      .filter(i => {
+        const s = state[i.id] || {};
+        return s.qty !== null || !!s.forceBuy;
+      })
+      .map(i => i.id)
+  );
+
+  const matches = ALL_ITEMS.filter(i => i.name.toLowerCase().includes(q));
+  container.innerHTML = '';
+
+  if (!matches.length) {
+    container.innerHTML = '<div class="add-item-empty">No items found</div>';
+    return;
+  }
+
+  matches.forEach(item => {
+    const alreadyAdded = alreadyOnList.has(item.id);
+    const storeClass = item.store === 'Online' ? 'store-online'
+      : item.store === 'Wet Market' ? 'store-wet' : 'store-super';
+    const row = document.createElement('div');
+    row.className = 'add-item-result' + (alreadyAdded ? ' already-added' : '');
+    row.innerHTML = `
+      <div style="flex:1;min-width:0;">
+        <div class="add-item-result-name ${item.must ? 'must' : ''}">${item.name}</div>
+        <div class="add-item-result-meta">${item.roomName} · ${item.subcat}</div>
+      </div>
+      <div class="add-item-result-badge ${storeClass}">${item.store || 'Supermarket'}</div>
+      ${alreadyAdded ? '<div style="font-size:11px;color:var(--sage-dark);font-weight:700;margin-left:6px;">✓ On list</div>' : ''}`;
+    if (!alreadyAdded) {
+      row.onclick = () => addItemToChecklist(item);
+    }
+    container.appendChild(row);
+  });
+}
+
+async function addItemToChecklist(item) {
+  // Set qty to 0 — appears on Pre-Shopping Checklist as "out of stock, needs buying"
+  if (!state[item.id]) state[item.id] = { qty: null, note: '' };
+  state[item.id].qty = 0;
+  state[item.id].forceBuy = false;
+  saveState();
+
+  closeAddItemModal();
+  showToast(`✓ ${item.name} added to checklist`);
+
+  // Re-render the checklist so item appears immediately
+  if (!finalListView) renderShoppingList();
+
+  // Sync to Sheet so other devices see the addition
+  const url = localStorage.getItem(KEY_URL);
+  if (url) {
+    try {
+      await androidSafePost(url, {
+        action: 'sync',
+        stock:  state,
+        date:   new Date().toLocaleDateString('en-AU'),
+        time:   new Date().toLocaleTimeString('en-AU', {hour:'2-digit',minute:'2-digit'}),
+        user:   localStorage.getItem(KEY_USER) || 'Helper',
+        sweepId: (() => {
+          const startTs = localStorage.getItem(KEY_SWEEP_START);
+          const user = localStorage.getItem(KEY_USER) || 'Helper';
+          return startTs
+            ? new Date(Number(startTs)).toISOString().slice(0,16).replace(/[-:T]/g,m=>m==='-'?m:m===':'?m:'_') + '_' + user.replace(/\s+/g,'')
+            : new Date().toISOString().slice(0,16).replace('T','_') + '_' + user.replace(/\s+/g,'');
+        })(),
+        scope: getSweepScope().join(', ') || 'All',
+      });
+      setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
+    } catch(e) {
+      setSyncBadge('pending', '⟳ Sync pending');
+    }
+  }
+}
+
+// Close add-item modal on overlay tap
+document.getElementById('add-item-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('add-item-overlay')) closeAddItemModal();
+});
 
 // ═══════════════════════════════════════════════════════════
 // UI HELPERS
