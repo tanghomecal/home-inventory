@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v27</title>
+<title>Home Inventory v28</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -426,6 +426,37 @@
   .final-list-picker-opt:active{background:var(--blush);}
   .final-list-picker-opt .flp-title{font-size:14px;font-weight:800;color:var(--charcoal);}
   .final-list-picker-opt .flp-meta{font-size:12px;color:var(--mid);font-weight:500;margin-top:2px;}
+
+  /* ── v28: SWEEP COMPLETE MODAL ── */
+  .sweep-complete-overlay{display:none;position:fixed;inset:0;background:rgba(30,50,40,0.82);z-index:1100;align-items:center;justify-content:center;padding:24px;}
+  .sweep-complete-overlay.active{display:flex;}
+  .sweep-complete-card{background:var(--white);border-radius:28px;padding:36px 28px 28px;width:100%;max-width:400px;text-align:center;animation:scaleIn 0.3s cubic-bezier(0.34,1.56,0.64,1);}
+  @keyframes scaleIn{from{transform:scale(0.85);opacity:0;}to{transform:scale(1);opacity:1;}}
+  .scc-tick{font-size:64px;margin-bottom:12px;animation:bounceIn 0.5s 0.1s both;}
+  @keyframes bounceIn{0%{transform:scale(0);}60%{transform:scale(1.2);}100%{transform:scale(1);}}
+  .scc-title{font-size:28px;font-weight:800;color:var(--sage-dark);letter-spacing:-0.5px;margin-bottom:6px;}
+  .scc-sub{font-size:15px;color:var(--charcoal-mid);font-weight:500;line-height:1.5;margin-bottom:6px;}
+  .scc-meta{font-size:13px;color:var(--mid);font-weight:600;background:var(--blush);border-radius:10px;padding:10px 16px;margin:14px 0 20px;line-height:1.6;}
+  .scc-cta{font-size:14px;font-weight:700;color:var(--charcoal-mid);margin-bottom:18px;line-height:1.5;}
+  .scc-btn-primary{width:100%;padding:17px;border:none;border-radius:var(--radius);background:linear-gradient(135deg,var(--sage),var(--sage-dark));color:white;font-family:var(--font);font-size:17px;font-weight:800;cursor:pointer;box-shadow:0 6px 20px rgba(90,122,108,0.35);margin-bottom:10px;}
+  .scc-btn-primary:active{transform:scale(0.98);}
+  .scc-btn-secondary{width:100%;padding:14px;border:2px solid var(--blush-mid);border-radius:var(--radius);background:transparent;font-family:var(--font);font-size:15px;font-weight:700;color:var(--mid);cursor:pointer;}
+  .scc-btn-secondary:active{background:var(--blush);}
+
+  /* ── v28: SWEEP DONE HOME BANNER ── */
+  .sweep-done-banner{margin:10px 14px 0;background:linear-gradient(135deg,#1A3A2A,#2A5A3A);border-radius:var(--radius-sm);padding:16px 18px;display:none;}
+  .sweep-done-banner.visible{display:block;}
+  .sdb-eyebrow{font-size:10px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;color:#7ECF9E;margin-bottom:4px;}
+  .sdb-title{font-size:16px;font-weight:800;color:#FFFFFF;margin-bottom:3px;}
+  .sdb-meta{font-size:12px;color:#8AAA9A;font-weight:500;margin-bottom:12px;}
+  .sdb-cta{font-size:13px;font-weight:700;color:#B0D8C0;margin-bottom:12px;}
+  .sdb-btns{display:flex;gap:8px;}
+  .sdb-go{flex:2;padding:12px;border:none;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--sage),var(--sage-dark));color:white;font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;}
+  .sdb-ack{flex:1;padding:12px;border:1.5px solid #3A6A4A;border-radius:var(--radius-sm);background:transparent;color:#8AAA9A;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;}
+
+  /* ── v28: AUTO-SKIP ROOM BADGE ── */
+  .room-autoskip-strip{display:none;margin-top:8px;padding:6px 12px;background:#EAF5EE;border-radius:8px;font-size:12px;font-weight:700;color:#5A7A6C;text-align:center;border:1px solid #C4DDD5;}
+  .room-autoskip-strip.visible{display:block;}
 </style>
 </head>
 <body>
@@ -476,6 +507,18 @@
     <div class="srb-btns">
       <button class="srb-resume" onclick="resumeSweep()">▶ Resume</button>
       <button class="srb-fresh" onclick="triggerStartFresh()">↺ Start Fresh</button>
+    </div>
+  </div>
+
+  <!-- v28: Sweep Done Banner — persists until Final List is saved for this sweep -->
+  <div class="sweep-done-banner" id="sweep-done-banner">
+    <div class="sdb-eyebrow">✓ Sweep Complete</div>
+    <div class="sdb-title" id="sdb-title">Inventory check done!</div>
+    <div class="sdb-meta" id="sdb-meta">—</div>
+    <div class="sdb-cta">The pre-shopping checklist is ready. Review it and build the final shopping list.</div>
+    <div class="sdb-btns">
+      <button class="sdb-go" onclick="dismissSweepDoneBannerAndShop()">🛒 View Shopping List</button>
+      <button class="sdb-ack" onclick="dismissSweepDoneBanner()">Got it</button>
     </div>
   </div>
 
@@ -614,6 +657,19 @@
   </div>
 </div>
 
+<!-- v28: Sweep Complete Modal -->
+<div class="sweep-complete-overlay" id="sweep-complete-overlay">
+  <div class="sweep-complete-card">
+    <div class="scc-tick">✅</div>
+    <div class="scc-title">Sweep Complete!</div>
+    <div class="scc-sub">All required rooms have been checked.</div>
+    <div class="scc-meta" id="scc-meta">—</div>
+    <div class="scc-cta">The pre-shopping checklist is ready.<br>Head there now to review and build the final list.</div>
+    <button class="scc-btn-primary" onclick="sweepCompleteGoShopping()">🛒 View Shopping List</button>
+    <button class="scc-btn-secondary" onclick="sweepCompleteAcknowledge()">Got it — I'll check later</button>
+  </div>
+</div>
+
 <!-- Store Picker Modal -->
 <div class="store-picker-overlay" id="store-picker-overlay">
   <div class="store-picker-sheet">
@@ -672,7 +728,7 @@
 // ═══════════════════════════════════════════════════════════
 // CONSTANTS & STATE
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION  = 'v27';
+const APP_VERSION  = 'v28';
 const KEY_STATE    = 'inv_state_v4';
 const KEY_ITEMS    = 'inv_items_v4';
 const KEY_URL      = 'inv_webAppUrl';
@@ -688,6 +744,10 @@ const KEY_LAST_SYNC = 'inv_lastSync';      // timestamp of last successful sync
 const KEY_BUY_QTYS  = 'inv_buyQtys';       // {itemId: buyQty} set by shopping list user
 const KEY_FINAL_LIST = 'inv_finalList';     // {listId, created, items:[{id,name,subcat,store,qty,note}]}
 const KEY_FINAL_LIST_ID = 'inv_finalListId'; // active final list ID
+// v28 keys
+const KEY_SWEEP_DONE       = 'inv_sweepDone';       // JSON: {sweepId,date,time,by,scope} of last completed sweep
+const KEY_SWEEP_DONE_ACKED = 'inv_sweepDoneAcked';  // sweepId that user acknowledged on home screen
+const KEY_FINAL_FOR_SWEEP  = 'inv_finalForSweep';   // sweepId of the sweep that has a saved final list
 
 // Item data — loaded from Google Sheets (no hardcoded items)
 let ROOMS     = [];
@@ -741,6 +801,8 @@ async function boot() {
     await fetchItemsFromSheet(url, !!cachedItems);
     await fetchUsersFromSheet(url);
     await attemptPendingSync(url);
+    // v28: check if a sweep was completed that needs a final list (cross-device)
+    await checkSweepDoneFromSheet(url);
   }
 }
 
@@ -937,6 +999,118 @@ async function attemptPendingSync(url) {
   } catch(e) {
     setSyncBadge('pending', '⟳ Sync pending');
   }
+}
+
+// ── v28: CHECK SWEEP DONE STATE (cross-device) ────────────────────────────────
+// Fetches the latest completed sweep from Sheet. If it has no corresponding
+// Final List yet, shows the sweep done banner on this device too.
+async function checkSweepDoneFromSheet(url) {
+  try {
+    const json = await androidSafeGet(`${url}?action=lastsweep`);
+    const sweeps = json.sweeps || [];
+    if (!sweeps.length) return;
+    const latest = sweeps[0]; // most recent completed sweep
+    if (!latest || !latest.sweepId) return;
+
+    // Store locally so banner can render
+    const doneInfo = {
+      sweepId: latest.sweepId,
+      date:    latest.date,
+      time:    latest.time,
+      by:      latest.by,
+      scope:   latest.scope || 'All stores',
+    };
+    localStorage.setItem(KEY_SWEEP_DONE, JSON.stringify(doneInfo));
+
+    // Check if a final list already exists for this sweep
+    const finalForSweep = localStorage.getItem(KEY_FINAL_FOR_SWEEP);
+    if (finalForSweep === latest.sweepId) return; // final list already done
+
+    // Check if user already acknowledged this sweep's banner
+    const acked = localStorage.getItem(KEY_SWEEP_DONE_ACKED);
+    if (acked === latest.sweepId) {
+      // Already acked — just show the persistent banner quietly (no modal)
+      updateSweepDoneBanner(doneInfo);
+      return;
+    }
+
+    // New completed sweep with no final list and not acked — show the modal
+    // But only if a sweep is NOT currently active on this device
+    const sweepActive = localStorage.getItem(KEY_SWEEP) === 'true';
+    if (!sweepActive) {
+      showSweepCompleteModal(doneInfo);
+    }
+  } catch(e) {
+    // Offline or error — fall through, banner will show from local state if available
+    const localDone = localStorage.getItem(KEY_SWEEP_DONE);
+    if (localDone) {
+      try {
+        const doneInfo = JSON.parse(localDone);
+        const finalForSweep = localStorage.getItem(KEY_FINAL_FOR_SWEEP);
+        const acked = localStorage.getItem(KEY_SWEEP_DONE_ACKED);
+        if (finalForSweep !== doneInfo.sweepId && acked === doneInfo.sweepId) {
+          updateSweepDoneBanner(doneInfo);
+        }
+      } catch(e2) {}
+    }
+    console.warn('checkSweepDoneFromSheet:', e);
+  }
+}
+
+function showSweepCompleteModal(doneInfo) {
+  const meta = document.getElementById('scc-meta');
+  if (meta) {
+    meta.textContent = `📅 ${doneInfo.date} · ${doneInfo.time} · by ${doneInfo.by} · ${doneInfo.scope}`;
+  }
+  document.getElementById('sweep-complete-overlay').classList.add('active');
+}
+
+function sweepCompleteGoShopping() {
+  sweepCompleteAcknowledge();
+  showShopping();
+}
+
+function sweepCompleteAcknowledge() {
+  document.getElementById('sweep-complete-overlay').classList.remove('active');
+  // Mark as acknowledged so modal doesn't re-appear, but banner persists
+  const localDone = localStorage.getItem(KEY_SWEEP_DONE);
+  if (localDone) {
+    try {
+      const doneInfo = JSON.parse(localDone);
+      localStorage.setItem(KEY_SWEEP_DONE_ACKED, doneInfo.sweepId);
+      updateSweepDoneBanner(doneInfo);
+    } catch(e) {}
+  }
+}
+
+function updateSweepDoneBanner(doneInfo) {
+  // Don't show if final list already generated for this sweep
+  const finalForSweep = localStorage.getItem(KEY_FINAL_FOR_SWEEP);
+  if (finalForSweep === doneInfo.sweepId) {
+    hideSweepDoneBanner();
+    return;
+  }
+  const banner = document.getElementById('sweep-done-banner');
+  if (!banner) return;
+  document.getElementById('sdb-title').textContent = '✓ Inventory sweep complete';
+  document.getElementById('sdb-meta').textContent =
+    `📅 ${doneInfo.date} · ${doneInfo.time} · by ${doneInfo.by} · ${doneInfo.scope}`;
+  banner.classList.add('visible');
+}
+
+function hideSweepDoneBanner() {
+  const banner = document.getElementById('sweep-done-banner');
+  if (banner) banner.classList.remove('visible');
+}
+
+function dismissSweepDoneBannerAndShop() {
+  // Keep banner visible until final list is saved; just navigate to shopping
+  showShopping();
+}
+
+function dismissSweepDoneBanner() {
+  // "Got it" just hides the banner for this session but keeps the acked state
+  hideSweepDoneBanner();
 }
 
 async function manualSync() {
@@ -1218,12 +1392,34 @@ function doBeginSweep(scope) {
   localStorage.setItem(KEY_SWEEP, 'true');
   localStorage.setItem(KEY_SWEEP_SCOPE, JSON.stringify(scope));
   localStorage.setItem(KEY_SWEEP_START, Date.now());
-  localStorage.setItem(KEY_ROOMS_DONE, '[]');
   localStorage.setItem('last_check', Date.now());
+
+  // v28: Auto-skip rooms that have NO in-scope ★ must items
+  // These rooms don't need to be visited — pre-mark them as done
+  const autoSkipped = [];
+  ROOMS.forEach(room => {
+    const hasScopedMust = Object.values(room.subcats).some(items =>
+      items.some(item => {
+        if (!item.must) return false;
+        if (scope.length === 0) return true;
+        return scope.includes(item.store || 'Supermarket');
+      })
+    );
+    if (!hasScopedMust) autoSkipped.push(room.id);
+  });
+  localStorage.setItem(KEY_ROOMS_DONE, JSON.stringify(autoSkipped));
+
+  // Clear sweep done state since we're starting fresh
+  localStorage.removeItem(KEY_SWEEP_DONE_ACKED);
+  localStorage.removeItem(KEY_FINAL_FOR_SWEEP);
+  hideSweepDoneBanner();
 
   renderHome();
   updateActionBar();
-  showToast('✓ New check started · ' + scope.join(', '));
+  const skippedMsg = autoSkipped.length > 0
+    ? ` · ${autoSkipped.length} room${autoSkipped.length>1?'s':''} auto-skipped`
+    : '';
+  showToast('✓ New check started · ' + scope.join(', ') + skippedMsg);
 }
 
 async function doStartFresh(newScope) {
@@ -1367,8 +1563,22 @@ function renderHome() {
     document.getElementById('srb-sub').textContent =
       `Started ${startStr} · Scope: ${scope.length?scope.join(', '):'All stores'}`;
     sweepBanner.classList.add('visible');
+    // v28: hide sweep done banner while sweep is active
+    hideSweepDoneBanner();
   } else {
     sweepBanner.classList.remove('visible');
+    // v28: show sweep done banner if applicable
+    const localDone = localStorage.getItem(KEY_SWEEP_DONE);
+    if (localDone) {
+      try {
+        const doneInfo = JSON.parse(localDone);
+        const finalForSweep = localStorage.getItem(KEY_FINAL_FOR_SWEEP);
+        const acked = localStorage.getItem(KEY_SWEEP_DONE_ACKED);
+        if (finalForSweep !== doneInfo.sweepId && acked === doneInfo.sweepId) {
+          updateSweepDoneBanner(doneInfo);
+        }
+      } catch(e) {}
+    }
   }
   let total=0,checked=0,need=0;
   ALL_ITEMS.forEach(item=>{
@@ -1419,11 +1629,12 @@ function renderHome() {
     const scopeSuffix = mustUnc>0 && sweepActiveNow && homeScope.length>0
       ? ` (${homeScope.join('+')})`
       : '';
-    // v27: if sweep is active and this room has NO in-scope must items, show "Optional" indicator
-    const optionalBadge = sweepActiveNow && !hasScopedMust && !isDone
-      ? `<div style="font-size:11px;color:var(--mid);font-weight:600;margin-top:4px;">No ★ required for ${homeScope.join('+')} — optional</div>`
+    // v28: auto-skipped = sweep active, no in-scope must items, room is in done list
+    const isAutoSkipped = sweepActiveNow && !hasScopedMust && isDone;
+    const autoSkipStrip = isAutoSkipped
+      ? `<div class="room-autoskip-strip visible">✓ No must-checks — auto-skipped for this sweep</div>`
       : '';
-    const doneStrip = isDone
+    const doneStrip = isDone && !isAutoSkipped
       ? `<div class="room-done-strip visible">✓ Done — ${rc} of ${rt} items checked · ${rn>0?rn+' needed':'all stocked'}</div>`
       : '';
     card.innerHTML=`
@@ -1432,12 +1643,11 @@ function renderHome() {
         <div class="room-info">
           <div class="room-name">${room.name}</div>
           <div class="room-meta">${rt} items · ${pct}% checked${mustUnc>0?` · ⚠️ ${mustUnc} ★ unchecked${scopeSuffix}`:''}</div>
-          ${optionalBadge}
         </div>
-        <div class="room-badge ${bClass}">${bText}</div>
+        <div class="room-badge ${isAutoSkipped?'done':bClass}">${isAutoSkipped?'✓ Skipped':bText}</div>
       </div>
       <div class="room-progress"><div class="room-progress-bar" style="width:${pct}%"></div></div>
-      ${doneStrip}`;
+      ${autoSkipStrip}${doneStrip}`;
     card.addEventListener('click',()=>openRoom(room.id));
     list.appendChild(card);
   });
@@ -1762,12 +1972,45 @@ async function tryFinishRoom(){
   // Mark this room as done in this sweep
   markRoomDone(currentRoomId);
 
-  // Check if ALL rooms are now done — if so, end the sweep
+  // v28: Sweep is complete when all rooms WITH in-scope ★ items are done.
+  // Rooms with no in-scope ★ items are auto-skipped and already in roomsDone.
   const done = getRoomsDone();
-  const allDone = ROOMS.length > 0 && done.length >= ROOMS.length;
+  const scope = getSweepScope();
+  const roomsRequiringCheck = ROOMS.filter(room =>
+    Object.values(room.subcats).some(items =>
+      items.some(item => {
+        if (!item.must) return false;
+        if (scope.length === 0) return true;
+        return scope.includes(item.store || 'Supermarket');
+      })
+    )
+  );
+  const allDone = roomsRequiringCheck.length > 0
+    ? roomsRequiringCheck.every(r => done.includes(r.id))
+    : ROOMS.length > 0 && done.length >= ROOMS.length;
+
+  const now = new Date();
+  const user = localStorage.getItem(KEY_USER) || 'Helper';
+
   if (allDone) {
     localStorage.setItem(KEY_SWEEP, 'false');
-    showToast('✓ All rooms done! Sweep complete.');
+
+    // v28: Record the completed sweep info and show modal
+    const startTs = localStorage.getItem(KEY_SWEEP_START);
+    const sweepId = startTs
+      ? new Date(Number(startTs)).toISOString().slice(0,16).replace(/[-:T]/g,m=>m==='-'?m:m===':'?m:'_') + '_' + user.replace(/\s+/g,'')
+      : now.toISOString().slice(0,16).replace('T','_') + '_' + user.replace(/\s+/g,'');
+    const doneInfo = {
+      sweepId,
+      date: now.toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'}),
+      time: now.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}),
+      by:   user,
+      scope: scope.length ? scope.join(', ') : 'All stores',
+    };
+    localStorage.setItem(KEY_SWEEP_DONE, JSON.stringify(doneInfo));
+    // Clear acked state so modal shows fresh
+    localStorage.removeItem(KEY_SWEEP_DONE_ACKED);
+    localStorage.removeItem(KEY_FINAL_FOR_SWEEP);
   } else {
     showToast(`Room saved ✓ · ${done.length}/${ROOMS.length} rooms done`);
   }
@@ -1787,6 +2030,12 @@ async function tryFinishRoom(){
       if(s.qty !== null){ totalChecked++; if(s.qty < 1) totalNeeded++; }
     });
     logSweepHistory(ROOMS.map(r => r.name), totalChecked, totalNeeded, 'Complete').catch(()=>{});
+
+    // v28: Show sweep complete modal
+    try {
+      const doneInfo = JSON.parse(localStorage.getItem(KEY_SWEEP_DONE) || '{}');
+      if (doneInfo.sweepId) showSweepCompleteModal(doneInfo);
+    } catch(e) {}
   }
 }
 
@@ -2675,6 +2924,18 @@ async function saveFinalListToSheet(){
   localStorage.setItem(KEY_FINAL_LIST, JSON.stringify(localLists.slice(-10))); // keep last 10
   localStorage.setItem(KEY_FINAL_LIST_ID, listId);
 
+  // v28: Associate this final list with the current/last sweep so banner clears
+  const localDone = localStorage.getItem(KEY_SWEEP_DONE);
+  if (localDone) {
+    try {
+      const doneInfo = JSON.parse(localDone);
+      if (doneInfo.sweepId) {
+        localStorage.setItem(KEY_FINAL_FOR_SWEEP, doneInfo.sweepId);
+        hideSweepDoneBanner();
+      }
+    } catch(e) {}
+  }
+
   showToast('Saving to Sheet…');
 
   try {
@@ -2697,24 +2958,46 @@ function _getSavedFinalLists(){
   catch(e){ return []; }
 }
 
-function openFinalListPicker(){
-  const lists = _getSavedFinalLists();
+async function openFinalListPicker(){
+  const url = localStorage.getItem(KEY_URL);
   const container = document.getElementById('final-list-picker-options');
+  container.innerHTML = '<p style="text-align:center;color:var(--mid);padding:16px;">Loading…</p>';
+  document.getElementById('final-list-picker-modal').classList.add('active');
+
+  let lists = _getSavedFinalLists(); // local fallback
+
+  if (url) {
+    try {
+      const json = await androidSafeGet(`${url}?action=getfinallists`);
+      if (json.lists && json.lists.length > 0) {
+        // Sheet is authoritative — normalise field names (Sheet uses itemId, local may use id)
+        lists = json.lists.map(fl => ({
+          ...fl,
+          items: (fl.items || []).map(i => ({...i, itemId: i.itemId || i.id})),
+        }));
+        // Update local cache
+        localStorage.setItem(KEY_FINAL_LIST, JSON.stringify(lists.slice(-10)));
+      }
+    } catch(e) {
+      console.warn('openFinalListPicker: sheet fetch failed, using local cache', e);
+    }
+  }
+
   container.innerHTML = '';
-  if(!lists.length){
+  if (!lists.length) {
     container.innerHTML = '<p style="text-align:center;color:var(--mid);padding:16px;">No saved lists yet.</p>';
   } else {
     [...lists].reverse().forEach(fl => {
       const opt = document.createElement('div');
       opt.className = 'final-list-picker-opt';
-      opt.innerHTML = `<div class="flp-title">${fl.label}</div><div class="flp-meta">${fl.itemCount} items · ${fl.created}</div>`;
+      opt.innerHTML = `<div class="flp-title">${fl.label}</div><div class="flp-meta">${fl.itemCount} items · ${fl.created || fl.createdAt || ''}</div>`;
       opt.onclick = () => {
-        // Load this list into finalListCache
         finalListCache = {};
         window._finalItemMeta = {};
         (fl.items||[]).forEach(i => {
-          finalListCache[i.itemId] = i.qty;
-          window._finalItemMeta[i.itemId] = i;
+          const key = i.itemId || i.id;
+          finalListCache[key] = i.qty;
+          window._finalItemMeta[key] = i;
         });
         closeFinalListPicker();
         renderFinalList();
@@ -2723,7 +3006,6 @@ function openFinalListPicker(){
       container.appendChild(opt);
     });
   }
-  document.getElementById('final-list-picker-modal').classList.add('active');
 }
 
 function closeFinalListPicker(){
