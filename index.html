@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v31</title>
+<title>Home Inventory v34</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -485,6 +485,85 @@
   .add-item-result-badge.store-wet{background:#FFF8E1;color:#C47A2A;}
   .add-item-empty{text-align:center;padding:32px 16px;color:var(--mid);font-size:14px;font-weight:500;}
   .add-item-cancel{width:100%;margin-top:14px;padding:15px;border:2px solid var(--blush-mid);border-radius:var(--radius);background:transparent;font-family:var(--font);font-size:15px;font-weight:700;color:var(--mid);cursor:pointer;flex-shrink:0;}
+
+  /* ── v33: AD HOC SHOPPING LIST ── */
+  .hab-adhoc{background:linear-gradient(135deg,#E8F0FE,#D0E0FC);color:#1A56BB;border:2px solid #BDCFEE;}
+  .hab-adhoc:active{background:#D0E0FC;}
+
+  /* Ad Hoc view layout */
+  #view-adhoc{background:var(--rose-white);}
+  .adhoc-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 120px;}
+  .adhoc-search-wrap{padding:10px 14px 0;position:sticky;top:0;z-index:10;background:var(--rose-white);padding-bottom:8px;}
+  .adhoc-search-box{display:flex;align-items:center;background:white;border:2px solid var(--blush-mid);border-radius:var(--radius-sm);padding:0 14px;gap:10px;transition:border-color 0.2s;}
+  .adhoc-search-box:focus-within{border-color:var(--sage);}
+  .adhoc-search-box input{flex:1;border:none;outline:none;background:transparent;font-family:var(--font);font-size:16px;color:var(--charcoal);padding:13px 0;font-weight:500;}
+  .adhoc-search-box input::placeholder{color:#C0B0A8;}
+
+  /* Store section headers */
+  .adhoc-store-hdr{display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:12px 12px 0 0;border:1.5px solid;margin-top:16px;cursor:pointer;user-select:none;}
+  .adhoc-store-hdr .adhoc-store-name{flex:1;font-size:14px;font-weight:800;letter-spacing:0.3px;}
+  .adhoc-store-hdr .adhoc-store-count{font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,0.6);}
+  .adhoc-store-body{border:1.5px solid;border-top:none;border-radius:0 0 12px 12px;overflow:hidden;margin-bottom:4px;}
+  .adhoc-subcat-hdr{font-size:10px;font-weight:800;letter-spacing:2px;text-transform:uppercase;padding:8px 14px;background:rgba(0,0,0,0.03);border-bottom:1px solid rgba(0,0,0,0.06);color:var(--mid);}
+
+  /* Ad hoc item row */
+  .adhoc-item{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid rgba(0,0,0,0.06);background:white;transition:background 0.12s;}
+  .adhoc-item:last-child{border-bottom:none;}
+  .adhoc-item.is-added{background:var(--sage-light);}
+  .adhoc-item-info{flex:1;min-width:0;}
+  .adhoc-item-name{font-size:14px;font-weight:700;color:var(--charcoal);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .adhoc-item-name.must::after{content:' ★';color:var(--amber);font-size:11px;}
+  .adhoc-item-meta{font-size:11px;color:var(--mid);font-weight:500;margin-top:1px;}
+  .adhoc-stepper{display:flex;align-items:center;gap:0;background:var(--blush);border:1.5px solid var(--blush-mid);border-radius:10px;overflow:hidden;flex-shrink:0;}
+  .adhoc-item.is-added .adhoc-stepper{background:white;border-color:var(--sage-mid);}
+  .adhoc-step-btn{width:36px;height:36px;border:none;background:transparent;font-size:20px;font-weight:600;color:var(--charcoal-mid);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.1s;flex-shrink:0;}
+  .adhoc-step-btn:active{background:var(--blush-mid);}
+  .adhoc-item.is-added .adhoc-step-btn{color:var(--sage-dark);}
+  .adhoc-step-num{min-width:36px;text-align:center;font-size:17px;font-weight:800;font-family:var(--mono);color:var(--charcoal);background:white;border-left:1px solid var(--blush-mid);border-right:1px solid var(--blush-mid);height:36px;display:flex;align-items:center;justify-content:center;}
+  .adhoc-step-num.zero{color:#C0B0A8;}
+  .adhoc-item.is-added .adhoc-step-num{color:var(--sage-dark);border-color:var(--sage-mid);}
+
+  /* Custom item row */
+  .adhoc-custom-row{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--amber-light);border-bottom:1px solid var(--amber-mid);cursor:pointer;transition:background 0.12s;}
+  .adhoc-custom-row:active{background:var(--amber-mid);}
+  .adhoc-custom-label{flex:1;font-size:14px;font-weight:700;color:var(--amber);display:flex;align-items:center;gap:8px;}
+
+  /* Custom item modal */
+  .adhoc-custom-overlay{display:none;position:fixed;inset:0;background:rgba(45,45,45,0.55);z-index:1060;align-items:flex-end;}
+  .adhoc-custom-overlay.active{display:flex;}
+  .adhoc-custom-sheet{background:var(--white);width:100%;border-radius:24px 24px 0 0;padding:20px 20px 44px;animation:slideUp 0.25s ease;}
+  .adhoc-custom-title{font-size:18px;font-weight:800;color:var(--charcoal);margin-bottom:16px;}
+  .adhoc-custom-field{margin-bottom:12px;}
+  .adhoc-custom-field label{display:block;font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--mid);margin-bottom:6px;}
+  .adhoc-custom-field input{width:100%;border:2px solid var(--blush-mid);border-radius:var(--radius-sm);padding:12px 14px;font-family:var(--font);font-size:16px;color:var(--charcoal);outline:none;background:var(--rose-white);transition:border-color 0.2s;box-sizing:border-box;}
+  .adhoc-custom-field input:focus{border-color:var(--sage);}
+  .adhoc-store-picker-row{display:flex;gap:8px;margin-bottom:12px;}
+  .adhoc-store-pill{flex:1;padding:10px 6px;border:2px solid var(--blush-mid);border-radius:var(--radius-sm);background:var(--blush);font-family:var(--font);font-size:12px;font-weight:700;color:var(--charcoal-mid);cursor:pointer;text-align:center;transition:all 0.15s;}
+  .adhoc-store-pill.active{border-color:var(--sage);background:var(--sage-light);color:var(--sage-dark);}
+  .adhoc-qty-row{display:flex;align-items:center;gap:12px;margin-bottom:20px;}
+  .adhoc-qty-label{font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--mid);flex-shrink:0;}
+  .adhoc-qty-stepper{display:flex;align-items:center;border:2px solid var(--blush-mid);border-radius:10px;overflow:hidden;}
+  .adhoc-qty-step-btn{width:44px;height:44px;border:none;background:var(--blush);font-size:22px;font-weight:600;color:var(--charcoal-mid);cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .adhoc-qty-step-btn:active{background:var(--blush-mid);}
+  .adhoc-qty-num{min-width:50px;text-align:center;font-size:22px;font-weight:800;font-family:var(--mono);color:var(--charcoal);background:white;border-left:1px solid var(--blush-mid);border-right:1px solid var(--blush-mid);height:44px;display:flex;align-items:center;justify-content:center;}
+  .adhoc-custom-add-btn{width:100%;padding:16px;border:none;border-radius:var(--radius);background:var(--amber);color:white;font-family:var(--font);font-size:16px;font-weight:800;cursor:pointer;margin-bottom:10px;}
+  .adhoc-custom-add-btn:active{background:#A86820;}
+  .adhoc-custom-cancel{width:100%;padding:14px;border:2px solid var(--blush-mid);border-radius:var(--radius);background:transparent;font-family:var(--font);font-size:15px;font-weight:700;color:var(--mid);cursor:pointer;}
+
+  /* Ad Hoc summary + footer */
+  .adhoc-summary{display:flex;gap:8px;padding:10px 14px 0;flex-wrap:wrap;}
+  .adhoc-summary-pill{font-size:12px;font-weight:700;padding:5px 12px;border-radius:20px;background:var(--blush);color:var(--charcoal-mid);border:1.5px solid var(--blush-mid);}
+  .adhoc-summary-pill.active{background:var(--sage-light);color:var(--sage-dark);border-color:var(--sage-mid);}
+  .adhoc-footer{position:fixed;bottom:0;left:0;right:0;background:var(--white);border-top:1.5px solid var(--blush-mid);padding:12px 14px calc(12px + env(safe-area-inset-bottom));display:flex;gap:10px;z-index:50;}
+  .adhoc-share-btn{flex:1;padding:15px;border:none;border-radius:var(--radius);background:var(--blush);color:var(--charcoal-mid);font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;border:2px solid var(--blush-mid);}
+  .adhoc-submit-btn{flex:2;padding:15px;border:none;border-radius:var(--radius);background:linear-gradient(135deg,var(--sage),var(--sage-dark));color:white;font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(90,122,108,0.3);}
+  .adhoc-submit-btn:active{transform:scale(0.98);}
+  .adhoc-submit-btn.loading{opacity:0.7;pointer-events:none;}
+  .adhoc-clear-btn{padding:15px 18px;border:2px solid var(--blush-mid);border-radius:var(--radius);background:transparent;font-family:var(--font);font-size:13px;font-weight:700;color:var(--mid);cursor:pointer;white-space:nowrap;}
+  .adhoc-empty{text-align:center;padding:60px 24px;}
+  .adhoc-empty .icon{font-size:48px;margin-bottom:12px;}
+  .adhoc-empty p{font-size:14px;color:var(--mid);line-height:1.6;font-weight:500;}
+  .adhoc-custom-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-mid);margin-left:6px;vertical-align:middle;}
 </style>
 </head>
 <body>
@@ -518,6 +597,14 @@
     <button class="hab-btn hab-start disabled" id="hab-start-btn" onclick="startCheck()">
       <span class="hab-icon">▶️</span>
       <span class="hab-label">Start Check</span>
+    </button>
+  </div>
+  <!-- v33: Ad Hoc list button -->
+  <div style="padding:10px 14px 0;">
+    <button class="hab-btn hab-adhoc" style="width:100%;flex-direction:row;justify-content:center;gap:10px;padding:13px 16px;" onclick="showAdhoc()">
+      <span style="font-size:20px;">🛍️</span>
+      <span style="font-size:14px;font-weight:800;letter-spacing:0.2px;">Ad Hoc Shopping List</span>
+      <span style="font-size:11px;color:#5A7A9C;font-weight:600;margin-left:auto;">No sweep needed →</span>
     </button>
   </div>
   <div class="home-search-wrap">
@@ -675,7 +762,67 @@
   </div>
 </div>
 
-<!-- ══════════ v31: ADD ITEM MODAL ══════════ -->
+<!-- ══════════ v33: AD HOC SHOPPING LIST VIEW ══════════ -->
+<div id="view-adhoc" class="view">
+  <div class="app-header">
+    <div class="header-row">
+      <button class="back-btn" onclick="goHome()">←</button>
+      <div class="header-title">
+        <div class="header-eyebrow">Shopping</div>
+        <div class="header-h2">Ad Hoc List</div>
+        <div class="header-sub" id="adhoc-sub-text">Add items from the master list</div>
+      </div>
+    </div>
+  </div>
+  <!-- Search bar -->
+  <div class="adhoc-search-wrap">
+    <div class="adhoc-search-box">
+      <span style="font-size:18px;color:var(--blush-dark);">🔍</span>
+      <input type="text" id="adhoc-search-input" placeholder="Search items…" autocomplete="off" autocorrect="off" spellcheck="false" oninput="onAdhocSearch(this.value)">
+      <span style="font-size:16px;color:#C0B0A8;cursor:pointer;" id="adhoc-search-clear" onclick="clearAdhocSearch()" style="display:none;">✕</span>
+    </div>
+  </div>
+  <!-- Item count summary pills -->
+  <div class="adhoc-summary" id="adhoc-summary"></div>
+  <!-- Main scrollable item list -->
+  <div class="adhoc-scroll" id="adhoc-scroll"></div>
+  <!-- Footer -->
+  <div class="adhoc-footer">
+    <button class="adhoc-clear-btn" onclick="clearAdhocList()">Clear</button>
+    <button class="adhoc-share-btn" onclick="shareAdhocList()">Share 📤</button>
+    <button class="adhoc-submit-btn" id="adhoc-submit-btn" onclick="submitAdhocToPrelim()">Submit to Pre-Shopping →</button>
+  </div>
+</div>
+
+<!-- ══════════ v33: CUSTOM ITEM MODAL ══════════ -->
+<div class="adhoc-custom-overlay" id="adhoc-custom-overlay">
+  <div class="adhoc-custom-sheet">
+    <div class="add-item-handle"></div>
+    <div class="adhoc-custom-title">✏️ Add Custom Item</div>
+    <div class="adhoc-custom-field">
+      <label>Item Name</label>
+      <input type="text" id="adhoc-custom-name" placeholder="e.g. Oat milk, Dishwasher tabs…" autocomplete="off" autocorrect="off">
+    </div>
+    <div class="adhoc-custom-field">
+      <label>Store</label>
+      <div class="adhoc-store-picker-row">
+        <button class="adhoc-store-pill active" id="adhoc-store-super" onclick="selectAdhocStore('Supermarket')">🛒 Super</button>
+        <button class="adhoc-store-pill" id="adhoc-store-wet" onclick="selectAdhocStore('Wet Market')">🥬 Wet Market</button>
+        <button class="adhoc-store-pill" id="adhoc-store-online" onclick="selectAdhocStore('Online')">💻 Online</button>
+      </div>
+    </div>
+    <div class="adhoc-qty-row">
+      <span class="adhoc-qty-label">Qty:</span>
+      <div class="adhoc-qty-stepper">
+        <button class="adhoc-qty-step-btn" onclick="adhocCustomQtyStep(-1)">−</button>
+        <div class="adhoc-qty-num" id="adhoc-custom-qty">1</div>
+        <button class="adhoc-qty-step-btn" onclick="adhocCustomQtyStep(1)">+</button>
+      </div>
+    </div>
+    <button class="adhoc-custom-add-btn" onclick="confirmAddCustomItem()">Add to List</button>
+    <button class="adhoc-custom-cancel" onclick="closeAdhocCustomModal()">Cancel</button>
+  </div>
+</div>
 <div class="add-item-overlay" id="add-item-overlay">
   <div class="add-item-sheet">
     <div class="add-item-handle"></div>
@@ -774,7 +921,7 @@
 // ═══════════════════════════════════════════════════════════
 // CONSTANTS & STATE
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION  = 'v31';
+const APP_VERSION  = 'v34';
 const KEY_STATE    = 'inv_state_v4';
 const KEY_ITEMS    = 'inv_items_v4';
 const KEY_URL      = 'inv_webAppUrl';
@@ -794,6 +941,8 @@ const KEY_FINAL_LIST_ID = 'inv_finalListId'; // active final list ID
 const KEY_SWEEP_DONE       = 'inv_sweepDone';       // JSON: {sweepId,date,time,by,scope} of last completed sweep
 const KEY_SWEEP_DONE_ACKED = 'inv_sweepDoneAcked';  // sweepId that user acknowledged on home screen
 const KEY_FINAL_FOR_SWEEP  = 'inv_finalForSweep';   // sweepId of the sweep that has a saved final list
+// v32 keys
+const KEY_PRELIM_SWEEP_ID  = 'inv_prelimSweepId';   // sweepId whose prelim state is currently loaded in-memory
 
 // Item data — loaded from Google Sheets (no hardcoded items)
 let ROOMS     = [];
@@ -812,6 +961,7 @@ let showAllItems = false;
 // v27: final shopping list state
 let finalListCache = {};   // {itemId: qty} — items confirmed for final list this session
 let finalListView  = false; // true = showing final list panel within shopping view
+let adhocJustSubmitted = false; // v34: skip sweep picker after ad hoc submit
 
 // ═══════════════════════════════════════════════════════════
 // BOOT
@@ -820,6 +970,7 @@ async function boot() {
   document.getElementById('app-version-badge').textContent = APP_VERSION;
   loadLocalState();
   loadSettings();
+  loadAdhocOnBoot();
 
   // Load cached users
   const cachedUsers = localStorage.getItem(KEY_USERS);
@@ -1140,7 +1291,17 @@ function updateSweepDoneBanner(doneInfo) {
   }
   const banner = document.getElementById('sweep-done-banner');
   if (!banner) return;
-  document.getElementById('sdb-title').textContent = '✓ Inventory sweep complete';
+  const isAdhoc = doneInfo.sweepId && doneInfo.sweepId.startsWith('ADHOC_');
+  // Update eyebrow and cta dynamically for Ad Hoc vs sweep
+  const eyebrow = banner.querySelector('.sdb-eyebrow');
+  const cta     = banner.querySelector('.sdb-cta');
+  if (eyebrow) eyebrow.textContent = isAdhoc ? '🛍️ Ad Hoc List Ready' : '✓ Sweep Complete';
+  if (cta)     cta.textContent     = isAdhoc
+    ? 'An ad hoc shopping list is ready to review. Check it and build the final shopping list.'
+    : 'The pre-shopping checklist is ready. Review it and build the final shopping list.';
+  document.getElementById('sdb-title').textContent = isAdhoc
+    ? '🛍️ Ad Hoc list submitted'
+    : '✓ Inventory sweep complete';
   document.getElementById('sdb-meta').textContent =
     `📅 ${doneInfo.date} · ${doneInfo.time} · by ${doneInfo.by} · ${doneInfo.scope}`;
   banner.classList.add('visible');
@@ -1161,67 +1322,41 @@ function dismissSweepDoneBanner() {
   hideSweepDoneBanner();
 }
 
-// ── v29: AUTO-LOAD LATEST FINAL LIST FROM SHEET ───────────────────────────────
-// Runs on boot. Fetches the most recent saved final list from the Sheet and
-// loads it into finalListCache so any device immediately sees it in the Final
-// List tab — no manual picker needed.
+// ── v29: AUTO-CACHE FINAL LISTS FROM SHEET ──────────────────────────────────
+// Runs on boot. Fetches saved final lists from Sheet and updates the local
+// cache so the picker (Load Saved List) works offline — but does NOT
+// auto-populate finalListCache, which must remain driven by the active prelim
+// session to avoid clashing with the pre-shopping checklist on other devices.
 async function fetchLatestFinalListFromSheet(url) {
   try {
     const json = await androidSafeGet(`${url}?action=getfinallists`);
     const lists = json.lists || [];
     if (!lists.length) return;
 
-    // Update local cache with full list from Sheet
+    // Update local cache with full list from Sheet (used by openFinalListPicker)
     localStorage.setItem(KEY_FINAL_LIST, JSON.stringify(lists.slice(-10)));
 
-    // Load the most recent list (first in array — Sheet returns newest first)
-    const latest = lists[0];
-    if (!latest || !latest.items || !latest.items.length) return;
+    // v32 FIX: Do NOT auto-load into finalListCache here.
+    // Doing so overwrites the prelim session state on a second device and
+    // prevents the pre-shopping checklist from showing correctly.
+    // The Final List tab's "Load" picker lets users explicitly pull a saved list.
 
-    // Populate finalListCache and _finalItemMeta
-    finalListCache = {};
-    window._finalItemMeta = {};
-    latest.items.forEach(i => {
-      const key = i.itemId || i.id;
-      if (!key) return;
-      finalListCache[key] = i.qty;
-      window._finalItemMeta[key] = { ...i, id: key };
-    });
-
-    // Store the listId so we know which sweep this belongs to
-    localStorage.setItem(KEY_FINAL_LIST_ID, latest.listId);
-
-    // Also mark this sweep as having a final list (suppresses sweep-done banner)
-    // by checking if the latest final list's listId contains a sweep timestamp
-    // we can match — simpler: just mark KEY_FINAL_FOR_SWEEP from the latest sweep done
+    // Only suppress the sweep-done banner if the latest final list was created
+    // after the latest sweep (i.e. the final list work is already done).
     const localDone = localStorage.getItem(KEY_SWEEP_DONE);
     if (localDone) {
       try {
         const doneInfo = JSON.parse(localDone);
-        // If the final list was created after the sweep, suppress the banner
-        if (doneInfo.sweepId && latest.createdAt) {
+        const latest = lists[0];
+        if (doneInfo.sweepId && latest && latest.createdAt) {
           localStorage.setItem(KEY_FINAL_FOR_SWEEP, doneInfo.sweepId);
           hideSweepDoneBanner();
         }
       } catch(e) {}
     }
-
-    showToast('📋 Final list ready to view');
   } catch(e) {
     console.warn('fetchLatestFinalListFromSheet:', e);
-    // Offline — try loading from local cache silently
-    const localLists = _getSavedFinalLists();
-    if (localLists.length) {
-      const latest = localLists[localLists.length - 1];
-      finalListCache = {};
-      window._finalItemMeta = {};
-      (latest.items || []).forEach(i => {
-        const key = i.itemId || i.id;
-        if (!key) return;
-        finalListCache[key] = i.qty;
-        window._finalItemMeta[key] = { ...i, id: key };
-      });
-    }
+    // Offline — local cache is already set from last successful fetch; no action needed.
   }
 }
 
@@ -2394,12 +2529,16 @@ function showShopping(){
     }).catch(()=>{ return []; });
 
     Promise.all([itemsPromise, buyQtyPromise, sweepsPromise]).then(([,,sweeps])=>{
-      // v29: if a final list was auto-loaded on boot, go straight to the Final List tab
-      if (Object.keys(finalListCache).length > 0) {
-        finalListView = true;
-        switchShopTab('finallist');
+      // v34: Ad Hoc submit already loaded state in-memory — skip picker and render directly
+      if (adhocJustSubmitted) {
+        adhocJustSubmitted = false;
+        finalListView = false;
+        switchShopTab('prechecklist');
+        renderShoppingList();
         return;
       }
+      // v32: finalListCache is no longer auto-loaded on boot, so we always
+      // start on the Pre-Shopping tab and let the user explicitly load a saved list.
       if(sweeps.length === 0){
         // No history from Sheet — fall back to local state
         _loadLocalStateAndRender();
@@ -2426,16 +2565,17 @@ function openSweepPicker(sweeps, url){
   const container = document.getElementById('sweep-picker-options');
   container.innerHTML = '';
   sweeps.forEach((sw, idx)=>{
+    const isAdhoc = sw.status === 'Ad Hoc' || (sw.sweepId && sw.sweepId.startsWith('ADHOC_'));
     const option = document.createElement('div');
     option.className = 'sweep-option';
     const ageLabel = idx === 0 ? 'Latest' : idx === 1 ? '2nd latest' : '3rd latest';
     option.innerHTML = `
       <div class="sweep-option-top">
-        <div class="sweep-option-scope">${sw.scope || 'All stores'}</div>
+        <div class="sweep-option-scope">${isAdhoc ? '🛍️ Ad Hoc · ' : ''}${sw.scope || 'All stores'}</div>
         <div class="sweep-option-age">${ageLabel}</div>
       </div>
       <div class="sweep-option-meta">📅 ${sw.date} · ${sw.time} · By <strong>${sw.by}</strong></div>
-      <div class="sweep-option-counts">✓ ${sw.itemsChecked} items checked · ${sw.itemsNeeded} needed</div>`;
+      <div class="sweep-option-counts">${isAdhoc ? '🛍️ Ad Hoc list' : '✓ ' + sw.itemsChecked + ' items checked'} · ${sw.itemsNeeded} items</div>`;
     option.onclick = () => {
       closeSweepPicker();
       currentSweepMeta = sw;
@@ -2459,6 +2599,60 @@ function showSweepPickerAgain(url){
   }).catch(()=>{});
 }
 
+// ── v32: REGENERATE FINAL LIST FROM A PREVIOUS SWEEP ──────────────────────────
+// Opens the sweep picker in "regen" mode. On selection:
+//   1. Clears finalListCache so we start fresh
+//   2. Loads the stock snapshot for that sweep
+//   3. Merges any saved prelim state (forceBuy / shopping-device edits)
+//   4. Switches to the Pre-Shopping tab so the user confirms items again
+function openRegenFromSweepPicker(){
+  const url = localStorage.getItem(KEY_URL);
+  if(!url){ showToast('Connect to Google Sheets first'); return; }
+  androidSafeGet(`${url}?action=lastsweep`).then(json=>{
+    const sweeps = json.sweeps || [];
+    if(!sweeps.length){ showToast('No completed sweeps found'); return; }
+    _openRegenPicker(sweeps, url);
+  }).catch(()=>{ showToast('Could not load sweeps — check connection'); });
+}
+
+function _openRegenPicker(sweeps, url){
+  const container = document.getElementById('sweep-picker-options');
+  container.innerHTML = '';
+  // Update the picker title to reflect this is a regen flow
+  const titleEl = document.querySelector('#sweep-picker-modal .sweep-picker-title');
+  const subEl   = document.querySelector('#sweep-picker-modal .sweep-picker-sub');
+  if(titleEl) titleEl.textContent = 'Regenerate Final List From…';
+  if(subEl)   subEl.textContent   = 'Choose a sweep to rebuild the pre-shopping checklist';
+
+  sweeps.forEach((sw, idx)=>{
+    const option = document.createElement('div');
+    option.className = 'sweep-option';
+    const ageLabel = idx === 0 ? 'Latest' : idx === 1 ? '2nd latest' : '3rd latest';
+    option.innerHTML = `
+      <div class="sweep-option-top">
+        <div class="sweep-option-scope">${sw.scope || 'All stores'}</div>
+        <div class="sweep-option-age">${ageLabel}</div>
+      </div>
+      <div class="sweep-option-meta">📅 ${sw.date} · ${sw.time} · By <strong>${sw.by}</strong></div>
+      <div class="sweep-option-counts">✓ ${sw.itemsChecked} items checked · ${sw.itemsNeeded} needed</div>`;
+    option.onclick = () => {
+      closeSweepPicker();
+      // Reset picker title for next regular use
+      if(titleEl) titleEl.textContent = 'Which sweep to view?';
+      if(subEl)   subEl.textContent   = 'Choose a sweep to load the pre-shopping checklist';
+      // Clear current final list — the user is starting fresh from this sweep
+      finalListCache = {};
+      window._finalItemMeta = {};
+      currentSweepMeta = sw;
+      // Switch to Pre-Shopping tab and load the sweep data
+      switchShopTab('prechecklist');
+      _fetchStockAndRender(url);
+    };
+    container.appendChild(option);
+  });
+  document.getElementById('sweep-picker-modal').classList.add('active');
+}
+
 function _fetchStockAndRender(url){
   const scroll = document.getElementById('shop-scroll');
   scroll.innerHTML = '<div style="text-align:center;padding:48px 24px;color:var(--charcoal-mid);font-size:15px;font-weight:600;">Loading stock data…</div>';
@@ -2468,21 +2662,45 @@ function _fetchStockAndRender(url){
   const endpoint = sweepId
     ? `${url}?action=stocksnapshot&sweepId=${encodeURIComponent(sweepId)}`
     : `${url}?action=stock`;
-  androidSafeGet(endpoint).then(json=>{
-    const stockData = json.stock || json.snapshot || {};
-    // Always mark that a sweep has been seen on this device so the
-    // "No check done yet" guard doesn't fire on the second device
+
+  // v32: Also try fetching the prelim state for this sweep (buy-qty edits +
+  // force-buy flags added by the shopping device) so cross-device state is merged.
+  const prelimPromise = sweepId
+    ? androidSafeGet(`${url}?action=getprelimlist&sweepId=${encodeURIComponent(sweepId)}`)
+        .catch(() => ({ prelim: null }))
+    : Promise.resolve({ prelim: null });
+
+  Promise.all([
+    androidSafeGet(endpoint).catch(() => ({})),
+    prelimPromise,
+  ]).then(([json, prelimJson]) => {
+    const stockData  = json.stock || json.snapshot || {};
+    const prelimState = (prelimJson.prelim && prelimJson.prelim.state) || {};
+
     if(localStorage.getItem(KEY_SWEEP) === null){
       localStorage.setItem(KEY_SWEEP, 'false');
     }
     if(Object.keys(stockData).length > 0){
-      // Load into state in-memory only — never persist to localStorage
+      // Load snapshot into state in-memory only — never persist to localStorage
       Object.entries(stockData).forEach(([id, s]) => {
         state[id] = { qty: s.qty, note: s.note || '', forceBuy: false };
       });
     }
+    // v32: Merge prelim state on top — this includes forceBuy flags and any
+    // qty edits the shopping device made after the sweep completed.
+    // Prelim wins over snapshot for forceBuy; snapshot wins for qty if prelim is absent.
+    Object.entries(prelimState).forEach(([id, p]) => {
+      if (!state[id]) state[id] = { qty: null, note: '', forceBuy: false };
+      if (p.forceBuy !== undefined) state[id].forceBuy = p.forceBuy;
+      // Only override qty from prelim if it was explicitly set there (not null)
+      if (p.qty !== null && p.qty !== undefined) state[id].qty = p.qty;
+      if (p.note) state[id].note = p.note;
+    });
+
+    // Track which sweepId's prelim is loaded
+    if (sweepId) localStorage.setItem(KEY_PRELIM_SWEEP_ID, sweepId);
+
   }).catch(()=>{
-    // Even on failure, mark sweep as seen so we don't show "No check done yet"
     if(currentSweepMeta && localStorage.getItem(KEY_SWEEP) === null){
       localStorage.setItem(KEY_SWEEP, 'false');
     }
@@ -2542,16 +2760,20 @@ function renderShoppingList(){
   }
 
   // v15: "Last checked by" banner — shown when viewing from a second device
+  // v34: updated to show Ad Hoc copy when relevant
   if(currentSweepMeta){
     const url = localStorage.getItem(KEY_URL);
+    const isAdhoc = currentSweepMeta.sweepId && currentSweepMeta.sweepId.startsWith('ADHOC_');
     const infoBanner = document.createElement('div');
     infoBanner.className = 'sweep-info-banner';
     infoBanner.innerHTML = `
       <div class="sweep-info-text">
-        Last checked by <strong>${currentSweepMeta.by}</strong><br>
+        ${isAdhoc
+          ? `🛍️ <strong>Ad Hoc list</strong> by <strong>${currentSweepMeta.by}</strong>`
+          : `Last checked by <strong>${currentSweepMeta.by}</strong>`}<br>
         📅 ${currentSweepMeta.date} · ${currentSweepMeta.time} · <strong>${currentSweepMeta.scope || 'All stores'}</strong>
       </div>
-      <div class="sweep-info-change" onclick="showSweepPickerAgain('${url}')">Change sweep</div>`;
+      <div class="sweep-info-change" onclick="showSweepPickerAgain('${url}')">Change</div>`;
     scroll.appendChild(infoBanner);
   }
 
@@ -2871,6 +3093,8 @@ function confirmToFinalList(itemId, itemName, subcat, store){
   if(genBtn) genBtn.textContent = confirmedCount > 0
     ? `✅ Generate Final List (${confirmedCount} item${confirmedCount!==1?'s':''})`
     : '✅ Generate Final List';
+  // v32: persist prelim state (including confirmed items) to Sheet for cross-device sync
+  syncPrelimToSheet();
 }
 
 // ── v27: TAB SWITCHER ─────────────────────────────────────────────────────────
@@ -2936,14 +3160,20 @@ function renderFinalList(){
         <div>Last saved: ${latest.label}</div>
         <div class="fsb-time">${latest.itemCount} items · ${latest.created}</div>
       </div>
-      <button onclick="openFinalListPicker()" style="border:none;background:var(--sage);color:white;padding:8px 12px;border-radius:8px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;">Load</button>`;
+      <div style="display:flex;gap:6px;">
+        <button onclick="openRegenFromSweepPicker()" style="border:none;background:var(--blush);color:var(--charcoal-mid);padding:8px 10px;border-radius:8px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid var(--blush-mid);">🔄</button>
+        <button onclick="openFinalListPicker()" style="border:none;background:var(--sage);color:white;padding:8px 12px;border-radius:8px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;">Load</button>
+      </div>`;
     scroll.appendChild(banner);
   }
 
   if(confirmedIds.length === 0){
+    const url = localStorage.getItem(KEY_URL);
     scroll.innerHTML += `<div class="final-list-empty">
       <div class="icon">📝</div>
       <p>No items added yet.<br>Go back to the Pre-Shopping tab and tap <strong>Add to Final List</strong> on each item you need to buy.</p>
+      ${url ? `<button onclick="openRegenFromSweepPicker()" style="margin-top:20px;width:100%;padding:14px;border:none;border-radius:var(--radius);background:var(--blush);color:var(--charcoal-mid);font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;border:2px solid var(--blush-mid);">🔄 Regenerate from a Previous Sweep</button>` : ''}
+      <button onclick="openFinalListPicker()" style="margin-top:10px;width:100%;padding:14px;border:none;border-radius:var(--radius);background:var(--sage-light);color:var(--sage-dark);font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;border:2px solid var(--sage-mid);">📂 Load a Saved Final List</button>
     </div>`;
     subEl.textContent = '0 items confirmed';
     return;
@@ -3292,12 +3522,589 @@ async function addItemToChecklist(item) {
       setSyncBadge('pending', '⟳ Sync pending');
     }
   }
+  // v32: also push the updated prelim state so other devices see this addition
+  syncPrelimToSheet();
 }
 
 // Close add-item modal on overlay tap
 document.getElementById('add-item-overlay').addEventListener('click', e => {
   if (e.target === document.getElementById('add-item-overlay')) closeAddItemModal();
 });
+
+// ═══════════════════════════════════════════════════════════
+// v32: PRELIM STATE SYNC TO SHEET
+// Saves the current in-memory state (forceBuy + qty per item) to the
+// 📋 Prelim Lists Sheet tab, keyed by sweepId, so any device can load it.
+// Called after addItemToChecklist or confirmToFinalList to keep cross-device state.
+// ═══════════════════════════════════════════════════════════
+async function syncPrelimToSheet() {
+  const url = localStorage.getItem(KEY_URL);
+  if (!url) return;
+
+  // Determine which sweepId this prelim belongs to
+  const sweepId = localStorage.getItem(KEY_PRELIM_SWEEP_ID)
+    || (currentSweepMeta && currentSweepMeta.sweepId)
+    || (() => {
+      const startTs = localStorage.getItem(KEY_SWEEP_START);
+      const user    = localStorage.getItem(KEY_USER) || 'Helper';
+      return startTs
+        ? new Date(Number(startTs)).toISOString().slice(0,16).replace(/[-:T]/g,m=>m==='-'?m:m===':'?m:'_') + '_' + user.replace(/\s+/g,'')
+        : null;
+    })();
+
+  if (!sweepId) return; // can't save without a sweep anchor
+
+  try {
+    await androidSafePost(url, {
+      action:  'saveprelimlist',
+      sweepId,
+      savedBy: localStorage.getItem(KEY_USER) || 'Helper',
+      state,   // full in-memory state — other devices will merge this on top of snapshot
+    });
+  } catch(e) {
+    console.warn('syncPrelimToSheet failed:', e);
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// v33: AD HOC SHOPPING LIST
+// ═══════════════════════════════════════════════════════════
+// Completely sweep-independent. State lives in adhocList:
+//   { [itemId]: { name, store, subcat, qty, custom?: true } }
+// Custom (free-form) items get a synthetic id: 'custom_<timestamp>'
+
+let adhocList        = {};              // items on the ad hoc list {id: {name,store,subcat,qty,custom?}}
+let adhocSearch      = '';             // current search query string
+let adhocCustomStore = 'Supermarket'; // store selected in custom-item modal
+
+const KEY_ADHOC = 'inv_adhocList';
+
+function loadAdhocState() {
+  try { const r = localStorage.getItem(KEY_ADHOC); if (r) adhocList = JSON.parse(r); } catch(e) { adhocList = {}; }
+}
+
+function saveAdhocState() {
+  localStorage.setItem(KEY_ADHOC, JSON.stringify(adhocList));
+}
+
+// ── ENTRY POINT ───────────────────────────────────────────────────────────────
+function showAdhoc() {
+  loadAdhocState();
+  if (ALL_ITEMS.length === 0) {
+    const url = localStorage.getItem(KEY_URL);
+    if (url) {
+      showView('adhoc');
+      document.getElementById('adhoc-scroll').innerHTML =
+        '<div class="adhoc-empty"><div class="icon">⏳</div><p>Loading items from Sheet…</p></div>';
+      androidSafeGet(`${url}?action=items`).then(json => {
+        if (json.items && json.items.length > 0) {
+          buildRoomsFromItems(json.items);
+          localStorage.setItem(KEY_ITEMS, JSON.stringify(json.items));
+        }
+        renderAdhoc();
+      }).catch(() => renderAdhoc());
+      return;
+    }
+  }
+  showView('adhoc');
+  renderAdhoc();
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function renderAdhoc() {
+  const scroll = document.getElementById('adhoc-scroll');
+  scroll.innerHTML = '';
+  const q = adhocSearch.toLowerCase();
+
+  if (ALL_ITEMS.length === 0) {
+    scroll.innerHTML = '<div class="adhoc-empty"><div class="icon">📋</div><p>Connect to Google Sheets first to load the item list.</p></div>';
+    updateAdhocSummary();
+    return;
+  }
+
+  const visibleItems = q
+    ? ALL_ITEMS.filter(i => i.name.toLowerCase().includes(q))
+    : ALL_ITEMS;
+
+  // Group by store → subcat
+  const storeGroups = { Supermarket: {}, 'Wet Market': {}, Online: {} };
+  visibleItems.forEach(item => {
+    const store = item.store || 'Supermarket';
+    if (!storeGroups[store]) storeGroups[store] = {};
+    const sc = item.subcat || '';
+    if (!storeGroups[store][sc]) storeGroups[store][sc] = [];
+    storeGroups[store][sc].push(item);
+  });
+
+  // Custom items (not in master list)
+  const allCustom = Object.values(adhocList).filter(i => i.custom);
+  const customByStore = { Supermarket: [], 'Wet Market': [], Online: [] };
+  allCustom.forEach(i => {
+    const s = i.store || 'Supermarket';
+    if (customByStore[s]) customByStore[s].push(i);
+    else customByStore[s] = [i];
+  });
+
+  const storeMeta = [
+    { key: 'Supermarket', icon: '🛒', color: '#5A7A6C', bg: '#E8F5E9', borderCol: '#5A7A6C' },
+    { key: 'Wet Market',  icon: '🥬', color: '#C47A2A', bg: '#FFF8E1', borderCol: '#C47A2A' },
+    { key: 'Online',      icon: '💻', color: '#1A56BB', bg: '#E8F0FE', borderCol: '#1A56BB' },
+  ];
+
+  let anySectionRendered = false;
+
+  storeMeta.forEach(({ key, icon, color, bg, borderCol }) => {
+    const subcatMap = storeGroups[key] || {};
+    const subcats   = Object.keys(subcatMap).sort();
+    const customs   = customByStore[key] || [];
+    const totalRows = subcats.reduce((n, sc) => n + subcatMap[sc].length, 0) + customs.length;
+
+    // When searching, skip stores with no matching items (and no custom items)
+    if (q && totalRows === 0) return;
+
+    anySectionRendered = true;
+
+    // Count how many are added
+    const addedCount = Object.values(adhocList).filter(
+      i => i.store === key && (i.qty || 0) > 0
+    ).length;
+
+    const safeKey = key.replace(/\s/g, '');
+    const bodyId  = 'adhoc-body-' + safeKey;
+
+    const section = document.createElement('div');
+
+    // Header
+    const hdr = document.createElement('div');
+    hdr.className = 'adhoc-store-hdr';
+    hdr.style.cssText = `background:${bg};border-color:${borderCol}44;`;
+    hdr.innerHTML = `
+      <span style="font-size:20px;">${icon}</span>
+      <span class="adhoc-store-name" style="color:${color};">${key}</span>
+      ${addedCount > 0 ? `<span class="adhoc-store-count" style="background:${color};color:white;">${addedCount} added</span>` : ''}
+      <span style="color:${color};font-size:16px;transition:transform 0.2s;" id="adhoc-chev-${safeKey}">▾</span>`;
+
+    // Body
+    const body = document.createElement('div');
+    body.className = 'adhoc-store-body';
+    body.id = bodyId;
+    body.style.cssText = `border-color:${borderCol}44;`;
+
+    hdr.onclick = () => {
+      const open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : '';
+      const chev = document.getElementById('adhoc-chev-' + safeKey);
+      if (chev) chev.style.transform = open ? 'rotate(-90deg)' : '';
+    };
+
+    // Master-list subcategory rows
+    subcats.forEach(sc => {
+      if (sc) {
+        const scHdr = document.createElement('div');
+        scHdr.className = 'adhoc-subcat-hdr';
+        scHdr.textContent = sc;
+        body.appendChild(scHdr);
+      }
+      subcatMap[sc].forEach(item => body.appendChild(_adhocItemRow(item)));
+    });
+
+    // Custom items for this store (shown under a "Custom" subcat header)
+    if (customs.length > 0) {
+      const cHdr = document.createElement('div');
+      cHdr.className = 'adhoc-subcat-hdr';
+      cHdr.innerHTML = 'Custom <span class="adhoc-custom-badge">✏️ added by you</span>';
+      body.appendChild(cHdr);
+      customs.forEach(ci => body.appendChild(_adhocCustomRow(ci)));
+    }
+
+    // "Add item not in list" row — pinned at bottom of each store body
+    const addCustomRow = document.createElement('div');
+    addCustomRow.className = 'adhoc-custom-row';
+    addCustomRow.innerHTML = `<span class="adhoc-custom-label"><span style="font-size:18px;">✏️</span> Add item not in list…</span>`;
+    addCustomRow.onclick = () => openAdhocCustomModal(key);
+    body.appendChild(addCustomRow);
+
+    section.appendChild(hdr);
+    section.appendChild(body);
+    scroll.appendChild(section);
+  });
+
+  if (!anySectionRendered) {
+    scroll.innerHTML = '<div class="adhoc-empty"><div class="icon">🔍</div><p>No items match your search.</p></div>';
+  }
+
+  updateAdhocSummary();
+}
+
+// Build a single master-list item row with stepper
+function _adhocItemRow(item) {
+  const entry = adhocList[item.id];
+  const qty   = entry ? (entry.qty || 0) : 0;
+  const added = qty > 0;
+
+  const row = document.createElement('div');
+  row.className = 'adhoc-item' + (added ? ' is-added' : '');
+  row.id = 'adhoc-row-' + item.id;
+  row.innerHTML = `
+    <div class="adhoc-item-info">
+      <div class="adhoc-item-name${item.must ? ' must' : ''}">${item.name}</div>
+      <div class="adhoc-item-meta">${item.subcat || ''}</div>
+    </div>
+    <div class="adhoc-stepper" id="adhoc-stepper-${item.id}">
+      <button class="adhoc-step-btn" onclick="adhocStep('${item.id}', -1, event)">−</button>
+      <div class="adhoc-step-num${qty === 0 ? ' zero' : ''}" id="adhoc-num-${item.id}">${qty === 0 ? '0' : qty}</div>
+      <button class="adhoc-step-btn" onclick="adhocStep('${item.id}', 1, event)">+</button>
+    </div>`;
+  return row;
+}
+
+// Build a custom item row with stepper + remove button
+function _adhocCustomRow(ci) {
+  const qty   = ci.qty || 0;
+  const added = qty > 0;
+  const row   = document.createElement('div');
+  row.className = 'adhoc-item' + (added ? ' is-added' : '');
+  row.id = 'adhoc-row-' + ci.id;
+  row.innerHTML = `
+    <div class="adhoc-item-info">
+      <div class="adhoc-item-name">${ci.name} <span class="adhoc-custom-badge">custom</span></div>
+      <div class="adhoc-item-meta">${ci.store}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <div class="adhoc-stepper" id="adhoc-stepper-${ci.id}">
+        <button class="adhoc-step-btn" onclick="adhocStep('${ci.id}', -1, event)">−</button>
+        <div class="adhoc-step-num${qty === 0 ? ' zero' : ''}" id="adhoc-num-${ci.id}">${qty}</div>
+        <button class="adhoc-step-btn" onclick="adhocStep('${ci.id}', 1, event)">+</button>
+      </div>
+      <button onclick="removeAdhocCustom('${ci.id}', event)"
+        style="border:none;background:var(--terra-light);color:var(--terra);width:32px;height:32px;border-radius:8px;font-size:15px;cursor:pointer;flex-shrink:0;">✕</button>
+    </div>`;
+  return row;
+}
+
+// ── STEPPER ───────────────────────────────────────────────────────────────────
+function adhocStep(itemId, delta, event) {
+  if (event) event.stopPropagation();
+
+  // Get current qty
+  const numEl = document.getElementById('adhoc-num-' + itemId);
+  let qty = numEl ? parseInt(numEl.textContent, 10) : 0;
+  if (isNaN(qty)) qty = 0;
+  qty = Math.max(0, qty + delta);
+
+  // Update state
+  if (qty === 0) {
+    // Keep entry but set qty to 0 (don't delete — user may want to re-add)
+    if (adhocList[itemId]) adhocList[itemId].qty = 0;
+  } else {
+    if (!adhocList[itemId]) {
+      // Look up from master list
+      const masterItem = ITEM_MAP[itemId];
+      if (masterItem) {
+        adhocList[itemId] = {
+          id:     itemId,
+          name:   masterItem.name,
+          store:  masterItem.store || 'Supermarket',
+          subcat: masterItem.subcat || '',
+          qty,
+        };
+      }
+    } else {
+      adhocList[itemId].qty = qty;
+    }
+  }
+  saveAdhocState();
+
+  // Update DOM in-place (no full re-render)
+  if (numEl) {
+    numEl.textContent = qty;
+    numEl.className   = 'adhoc-step-num' + (qty === 0 ? ' zero' : '');
+  }
+  const row = document.getElementById('adhoc-row-' + itemId);
+  if (row) row.className = 'adhoc-item' + (qty > 0 ? ' is-added' : '');
+
+  updateAdhocSummary();
+}
+
+function removeAdhocCustom(itemId, event) {
+  if (event) event.stopPropagation();
+  delete adhocList[itemId];
+  saveAdhocState();
+  renderAdhoc();
+}
+
+// ── SEARCH ────────────────────────────────────────────────────────────────────
+function onAdhocSearch(val) {
+  adhocSearch = val.trim();
+  const clearBtn = document.getElementById('adhoc-search-clear');
+  if (clearBtn) clearBtn.style.display = adhocSearch ? 'block' : 'none';
+  renderAdhoc();
+}
+
+function clearAdhocSearch() {
+  adhocSearch = '';
+  const inp = document.getElementById('adhoc-search-input');
+  if (inp) inp.value = '';
+  const clearBtn = document.getElementById('adhoc-search-clear');
+  if (clearBtn) clearBtn.style.display = 'none';
+  renderAdhoc();
+}
+
+// ── SUMMARY PILLS ─────────────────────────────────────────────────────────────
+function updateAdhocSummary() {
+  const container = document.getElementById('adhoc-summary');
+  if (!container) return;
+
+  const counts = { Supermarket: 0, 'Wet Market': 0, Online: 0 };
+  Object.values(adhocList).forEach(i => {
+    if ((i.qty || 0) > 0 && counts[i.store] !== undefined) counts[i.store]++;
+  });
+
+  const total = counts.Supermarket + counts['Wet Market'] + counts.Online;
+  const subText = document.getElementById('adhoc-sub-text');
+  if (subText) subText.textContent = total > 0
+    ? `${total} item${total !== 1 ? 's' : ''} on your list`
+    : 'Add items from the master list';
+
+  container.innerHTML = [
+    { label: `🛒 ${counts.Supermarket}`, active: counts.Supermarket > 0 },
+    { label: `🥬 ${counts['Wet Market']}`, active: counts['Wet Market'] > 0 },
+    { label: `💻 ${counts.Online}`, active: counts.Online > 0 },
+  ].map(p => `<span class="adhoc-summary-pill${p.active ? ' active' : ''}">${p.label}</span>`).join('');
+}
+
+// ── CUSTOM ITEM MODAL ─────────────────────────────────────────────────────────
+function openAdhocCustomModal(defaultStore) {
+  adhocCustomStore = defaultStore || 'Supermarket';
+  document.getElementById('adhoc-custom-name').value = '';
+  document.getElementById('adhoc-custom-qty').textContent = '1';
+  _updateAdhocStorePills();
+  document.getElementById('adhoc-custom-overlay').classList.add('active');
+  setTimeout(() => document.getElementById('adhoc-custom-name').focus(), 300);
+}
+
+function closeAdhocCustomModal() {
+  document.getElementById('adhoc-custom-overlay').classList.remove('active');
+}
+
+function selectAdhocStore(store) {
+  adhocCustomStore = store;
+  _updateAdhocStorePills();
+}
+
+function _updateAdhocStorePills() {
+  ['Supermarket', 'Wet Market', 'Online'].forEach(s => {
+    const id = 'adhoc-store-' + s.toLowerCase().replace(/\s/g, '');
+    // map to actual element IDs
+  });
+  document.getElementById('adhoc-store-super').classList.toggle('active', adhocCustomStore === 'Supermarket');
+  document.getElementById('adhoc-store-wet').classList.toggle('active', adhocCustomStore === 'Wet Market');
+  document.getElementById('adhoc-store-online').classList.toggle('active', adhocCustomStore === 'Online');
+}
+
+function adhocCustomQtyStep(delta) {
+  const el  = document.getElementById('adhoc-custom-qty');
+  let qty   = parseInt(el.textContent, 10) || 1;
+  qty = Math.max(1, qty + delta);
+  el.textContent = qty;
+}
+
+function confirmAddCustomItem() {
+  const nameEl = document.getElementById('adhoc-custom-name');
+  const name   = nameEl ? nameEl.value.trim() : '';
+  if (!name) { nameEl && nameEl.focus(); showToast('Please enter an item name'); return; }
+
+  const qty = parseInt(document.getElementById('adhoc-custom-qty').textContent, 10) || 1;
+  const id  = 'custom_' + Date.now();
+
+  adhocList[id] = {
+    id,
+    name,
+    store:  adhocCustomStore,
+    subcat: '',
+    qty,
+    custom: true,
+  };
+  saveAdhocState();
+  closeAdhocCustomModal();
+  renderAdhoc();
+  showToast(`✓ "${name}" added`);
+}
+
+// Close custom modal on overlay tap
+document.getElementById('adhoc-custom-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('adhoc-custom-overlay')) closeAdhocCustomModal();
+});
+
+// ── CLEAR ─────────────────────────────────────────────────────────────────────
+function clearAdhocList() {
+  const total = Object.values(adhocList).filter(i => (i.qty || 0) > 0).length;
+  if (total === 0) { showToast('List is already empty'); return; }
+  if (!confirm(`Clear all ${total} item${total !== 1 ? 's' : ''} from the ad hoc list?`)) return;
+  adhocList = {};
+  saveAdhocState();
+  renderAdhoc();
+  showToast('List cleared');
+}
+
+// ── SHARE ─────────────────────────────────────────────────────────────────────
+function shareAdhocList() {
+  const items = Object.values(adhocList).filter(i => (i.qty || 0) > 0);
+  if (!items.length) { showToast('Nothing to share yet!'); return; }
+
+  const byStore = { Supermarket: [], 'Wet Market': [], Online: [] };
+  items.forEach(i => {
+    const s = i.store || 'Supermarket';
+    if (byStore[s]) byStore[s].push(i);
+  });
+
+  const storeIcons = { Supermarket: '🛒', 'Wet Market': '🥬', Online: '💻' };
+  let text = `🛍️ Ad Hoc Shopping List — ${new Date().toLocaleDateString('en-AU')}\n`;
+  ['Supermarket', 'Wet Market', 'Online'].forEach(s => {
+    if (!byStore[s].length) return;
+    text += `\n${storeIcons[s]} ${s.toUpperCase()} (${byStore[s].length})\n`;
+    byStore[s]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .forEach(i => { text += `  • ${i.name}  ×${i.qty}${i.custom ? ' ✏️' : ''}\n`; });
+  });
+
+  if (navigator.share) navigator.share({ title: 'Ad Hoc Shopping List', text });
+  else if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard!'));
+  else showToast('Use Chrome Share for this feature');
+}
+
+// ── SUBMIT TO PRE-SHOPPING ────────────────────────────────────────────────────
+// Treats the ad hoc list as a lightweight sweep:
+//   1. Builds a state object ({ itemId: {qty, note, forceBuy} }) from adhocList
+//   2. POSTs to saveprelimlist (keyed by a synthetic ADHOC_... sweepId)
+//   3. POSTs to history (status = "Ad Hoc") so lastsweep returns it
+//   4. Triggers the sweep-done banner on this device
+//   5. Other devices pick it up via checkSweepDoneFromSheet on their next boot/sync
+async function submitAdhocToPrelim() {
+  const url   = localStorage.getItem(KEY_URL);
+  const items = Object.values(adhocList).filter(i => (i.qty || 0) > 0);
+
+  if (!items.length) { showToast('Add some items first!'); return; }
+  if (!url)          { showToast('Connect to Google Sheets first'); return; }
+
+  const btn  = document.getElementById('adhoc-submit-btn');
+  if (btn) { btn.classList.add('loading'); btn.textContent = 'Submitting…'; }
+
+  const user    = localStorage.getItem(KEY_USER) || 'Helper';
+  const now     = new Date();
+  const dateStr = now.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+  const timeStr = now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' });
+
+  // Synthetic sweepId — same format as a real sweep so all downstream logic works
+  const sweepId = 'ADHOC_' + now.toISOString().slice(0, 16).replace(/[-:T]/g, '') + '_' + user.replace(/\s+/g, '');
+
+  // Build state object for saveprelimlist (itemId → {qty, note, forceBuy})
+  // Custom items get stored with their synthetic id; master items use their real id
+  const prelimState = {};
+  items.forEach(i => {
+    prelimState[i.id] = {
+      qty:      i.qty,
+      note:     i.custom ? '✏️ Custom item' : '',
+      forceBuy: false,
+    };
+  });
+
+  // Determine scope from which stores are present
+  const stores = [...new Set(items.map(i => i.store || 'Supermarket'))];
+  const scope  = stores.join(', ');
+
+  // Count master-list vs custom items for history
+  const masterCount = items.filter(i => !i.custom).length;
+  const customCount = items.filter(i =>  i.custom).length;
+  const totalCount  = items.length;
+
+  let savedOk = false;
+  try {
+    // 1. Save prelim state to Sheet (buying device will fetch this)
+    await androidSafePost(url, {
+      action:  'saveprelimlist',
+      sweepId,
+      savedBy: user,
+      state:   prelimState,
+    });
+
+    // 2. Log to Sweep History so lastsweep returns it and other devices see the banner
+    await androidSafePost(url, {
+      action:       'history',
+      sweepDate:    dateStr,
+      sweepTime:    timeStr,
+      completedBy:  user,
+      rooms:        'Ad Hoc',
+      itemsChecked: totalCount,
+      itemsNeeded:  totalCount,
+      status:       'Ad Hoc',
+      scope,
+      notes:        `${masterCount} from list${customCount > 0 ? ', ' + customCount + ' custom' : ''}`,
+      sweepId,
+    });
+
+    savedOk = true;
+  } catch(e) {
+    console.warn('submitAdhocToPrelim: sheet sync failed', e);
+    showToast('Sheet sync failed — list saved locally only');
+  }
+
+  // 3. Store sweep-done info locally so THIS device shows the banner too
+  const doneInfo = { sweepId, date: dateStr, time: timeStr, by: user, scope };
+  localStorage.setItem(KEY_SWEEP_DONE, JSON.stringify(doneInfo));
+  localStorage.removeItem(KEY_SWEEP_DONE_ACKED);
+  localStorage.removeItem(KEY_FINAL_FOR_SWEEP);
+
+  // 4. Store the sweepId so the prelim can be fetched when shopping opens
+  localStorage.setItem(KEY_PRELIM_SWEEP_ID, sweepId);
+
+  // 5. Load the ad hoc state into the in-memory state so the Pre-Shopping tab
+  //    renders immediately without needing to fetch from Sheet first.
+  //    We set KEY_SWEEP to 'false' (not active) but populate state so items show.
+  localStorage.setItem(KEY_SWEEP, 'false');
+  items.forEach(i => {
+    state[i.id] = { qty: i.qty, note: i.custom ? '✏️ Custom item' : '', forceBuy: false };
+  });
+  // Also store item metadata for custom items so Pre-Shopping can render them
+  if (!window._adhocCustomMeta) window._adhocCustomMeta = {};
+  items.filter(i => i.custom).forEach(i => {
+    // Inject into ITEM_MAP so renderShoppingList can find the name/store/subcat
+    ITEM_MAP[i.id] = { id: i.id, name: i.name, store: i.store, subcat: i.subcat || '', must: false, roomId: 'adhoc', roomName: 'Ad Hoc' };
+    ALL_ITEMS.push(ITEM_MAP[i.id]);
+    window._adhocCustomMeta[i.id] = ITEM_MAP[i.id];
+  });
+
+  // 6. Set currentSweepMeta so the sweep info banner shows in Pre-Shopping
+  currentSweepMeta = {
+    sweepId,
+    by:    user,
+    date:  dateStr,
+    time:  timeStr,
+    scope,
+    itemsChecked: totalCount,
+    itemsNeeded:  totalCount,
+  };
+
+  if (btn) { btn.classList.remove('loading'); btn.textContent = 'Submit to Pre-Shopping →'; }
+
+  // 7. Show sweep-done banner on home and navigate to Pre-Shopping
+  updateSweepDoneBanner(doneInfo);
+
+  if (savedOk) {
+    showToast('✓ Ad Hoc list submitted!');
+  }
+
+  // Navigate directly to Pre-Shopping checklist (skip the sweep picker)
+  adhocJustSubmitted = true;
+  showShopping();
+}
+
+// ── BOOT HOOK — load ad hoc state on startup ──────────────────────────────────
+// Called inside boot() after local state is loaded
+function loadAdhocOnBoot() {
+  loadAdhocState();
+}
 
 // ═══════════════════════════════════════════════════════════
 // UI HELPERS
