@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v34</title>
+<title>Home Inventory v36</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -426,6 +426,36 @@
   .final-list-picker-opt:active{background:var(--blush);}
   .final-list-picker-opt .flp-title{font-size:14px;font-weight:800;color:var(--charcoal);}
   .final-list-picker-opt .flp-meta{font-size:12px;color:var(--mid);font-weight:500;margin-top:2px;}
+
+  /* ── v35: FINAL LIST — BOUGHT TOGGLE ── */
+  .final-item{transition:opacity 0.25s,filter 0.25s;}
+  .final-item.bought{opacity:0.38;filter:grayscale(0.6);}
+  .final-item.bought .final-item-name{text-decoration:line-through;color:var(--mid);}
+  .final-item.bought .final-item-qty{background:var(--blush);border-color:var(--blush-mid);color:var(--mid);}
+  .fi-bought-toggle{width:48px;height:48px;border-radius:12px;border:2.5px solid var(--blush-mid);background:var(--rose-white);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all 0.18s;-webkit-tap-highlight-color:transparent;}
+  .fi-bought-toggle:active{transform:scale(0.9);}
+  .fi-bought-toggle.checked{background:var(--sage);border-color:var(--sage-dark);box-shadow:0 3px 10px rgba(90,122,108,0.35);}
+  .fi-bought-toggle-icon{font-size:22px;line-height:1;transition:transform 0.18s;}
+  .fi-bought-toggle.checked .fi-bought-toggle-icon{transform:scale(1.1);}
+
+  /* ── v35: FINAL LIST — REORDER MODE ── */
+  .final-mode-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--blush);border-bottom:1.5px solid var(--blush-mid);margin-bottom:2px;}
+  .final-mode-btn{flex:1;padding:10px 8px;border:2px solid var(--blush-mid);border-radius:10px;background:var(--white);font-family:var(--font);font-size:13px;font-weight:800;color:var(--charcoal-mid);cursor:pointer;transition:all 0.15s;text-align:center;}
+  .final-mode-btn.active{background:var(--charcoal);color:white;border-color:var(--charcoal);}
+  .final-mode-btn:active{transform:scale(0.97);}
+  .fi-drag-handle{width:36px;height:48px;display:flex;align-items:center;justify-content:center;cursor:grab;flex-shrink:0;color:#C0B0A8;font-size:20px;touch-action:none;}
+  .fi-drag-handle:active{cursor:grabbing;color:var(--charcoal-mid);}
+  .final-item.dragging{opacity:0.4;background:var(--blush)!important;}
+  .final-item.drag-over{border-color:var(--sage)!important;background:var(--sage-light)!important;}
+  .final-item.reorder-mode{border-color:var(--blush-mid);padding-left:4px;}
+  .fi-new-badge{font-size:10px;font-weight:800;background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-mid);border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:middle;white-space:nowrap;}
+
+  /* ── v35: ROUTE BANNER ── */
+  .route-applied-banner{display:flex;align-items:center;gap:10px;background:var(--sage-light);border:1.5px solid var(--sage-mid);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:10px;font-size:13px;font-weight:600;color:var(--sage-dark);}
+  .route-applied-banner .rab-label{flex:1;}
+  .route-save-btn{padding:8px 14px;border:none;border-radius:8px;background:var(--sage);color:white;font-family:var(--font);font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;}
+  .route-save-btn:active{background:var(--sage-dark);}
+  .route-new-items-banner{display:flex;align-items:center;gap:8px;background:var(--amber-light);border:1.5px solid var(--amber-mid);border-radius:var(--radius-sm);padding:9px 14px;margin-bottom:8px;font-size:12px;font-weight:700;color:var(--amber);}
 
   /* ── v28: SWEEP COMPLETE MODAL ── */
   .sweep-complete-overlay{display:none;position:fixed;inset:0;background:rgba(30,50,40,0.82);z-index:1100;align-items:center;justify-content:center;padding:24px;}
@@ -921,7 +951,7 @@
 // ═══════════════════════════════════════════════════════════
 // CONSTANTS & STATE
 // ═══════════════════════════════════════════════════════════
-const APP_VERSION  = 'v34';
+const APP_VERSION  = 'v36';
 const KEY_STATE    = 'inv_state_v4';
 const KEY_ITEMS    = 'inv_items_v4';
 const KEY_URL      = 'inv_webAppUrl';
@@ -943,6 +973,7 @@ const KEY_SWEEP_DONE_ACKED = 'inv_sweepDoneAcked';  // sweepId that user acknowl
 const KEY_FINAL_FOR_SWEEP  = 'inv_finalForSweep';   // sweepId of the sweep that has a saved final list
 // v32 keys
 const KEY_PRELIM_SWEEP_ID  = 'inv_prelimSweepId';   // sweepId whose prelim state is currently loaded in-memory
+const KEY_ROUTES           = 'inv_routes';            // v36: {store: {routeId,name,savedBy,savedAt,itemOrder:[]}}
 
 // Item data — loaded from Google Sheets (no hardcoded items)
 let ROOMS     = [];
@@ -995,6 +1026,8 @@ async function boot() {
   // Fetch live items + users from Sheet if URL is set
   const url = localStorage.getItem(KEY_URL);
   if (url) {
+    // v36: fetch routes from Sheet (non-blocking, updates local cache)
+    _fetchRoutesFromSheet(url);
     await fetchItemsFromSheet(url, !!cachedItems);
     await fetchUsersFromSheet(url);
     await attemptPendingSync(url);
@@ -2641,7 +2674,7 @@ function _openRegenPicker(sweeps, url){
       if(titleEl) titleEl.textContent = 'Which sweep to view?';
       if(subEl)   subEl.textContent   = 'Choose a sweep to load the pre-shopping checklist';
       // Clear current final list — the user is starting fresh from this sweep
-      finalListCache = {};
+      finalListCache = {}; finalListBoughtState = {}; _saveBoughtState({});
       window._finalItemMeta = {};
       currentSweepMeta = sw;
       // Switch to Pre-Shopping tab and load the sweep data
@@ -3126,8 +3159,120 @@ function switchShopTab(tab){
   }
 }
 
-// ── v27: FINAL LIST RENDERER ──────────────────────────────────────────────────
+// ── v27: FINAL LIST RENDERER (v35: bought toggle + reorder + route) ─────────────
+// v35 state
+let finalListMode = 'shop'; // 'shop' | 'reorder'
+let finalListOrderMode = 'route'; // 'route' | 'category' — session-only toggle in shop mode
+let finalListBoughtState = {}; // {itemId: true} — persisted to localStorage
+let finalListCustomOrder = null; // null = use default sort; array of itemIds = custom order
+const KEY_BOUGHT_STATE = 'inv_boughtState';
+// KEY_ROUTE_PREFIX removed in v36 — routes now cached under KEY_ROUTES per store
+
+function _loadBoughtState(){
+  try { return JSON.parse(localStorage.getItem(KEY_BOUGHT_STATE)||'{}'); } catch(e){ return {}; }
+}
+function _saveBoughtState(s){
+  localStorage.setItem(KEY_BOUGHT_STATE, JSON.stringify(s));
+}
+// ── v36: Sheet-backed route cache ────────────────────────────────────────────
+// Routes are fetched from Sheet on boot and cached in localStorage under KEY_ROUTES.
+// _getRoute / _saveRoute operate on the local cache; saveCurrentOrderAsRoute()
+// also POSTs to the Sheet so routes survive across devices.
+
+function _getRoutesCache(){
+  try { return JSON.parse(localStorage.getItem(KEY_ROUTES)||'{}'); } catch(e){ return {}; }
+}
+function _setRoutesCache(cache){
+  localStorage.setItem(KEY_ROUTES, JSON.stringify(cache));
+}
+function _getRoute(store){
+  const cache = _getRoutesCache();
+  return (cache[store] && cache[store].itemOrder && cache[store].itemOrder.length)
+    ? cache[store].itemOrder
+    : null;
+}
+function _getRouteMeta(store){
+  const cache = _getRoutesCache();
+  return cache[store] || null;
+}
+function _saveRouteLocal(store, orderedIds, name){
+  const cache = _getRoutesCache();
+  cache[store] = {
+    itemOrder: orderedIds,
+    name: name || store,
+    savedAt: new Date().toISOString(),
+  };
+  _setRoutesCache(cache);
+}
+async function _fetchRoutesFromSheet(url){
+  try {
+    const json = await androidSafeGet(`${url}?action=getroutes`);
+    if(json.routes && Object.keys(json.routes).length > 0){
+      // Merge: Sheet is authoritative
+      const cache = _getRoutesCache();
+      Object.entries(json.routes).forEach(([store, route]) => {
+        cache[store] = route;
+      });
+      _setRoutesCache(cache);
+    }
+  } catch(e){
+    console.warn('_fetchRoutesFromSheet failed (offline ok):', e);
+  }
+}
+
+// Apply a saved route to a list of items. Returns items sorted by route position.
+// Items not in route go to end (new items). Returns {sorted, newItems: []}
+function _applyRoute(store, items){
+  const route = _getRoute(store);
+  if(!route || route.length === 0) return { sorted: items, newItems: [], routeName: null };
+  const routeIndex = {};
+  route.forEach((id, i) => { routeIndex[id] = i; });
+  const inRoute = items.filter(i => routeIndex[i.id] !== undefined);
+  const newItems = items.filter(i => routeIndex[i.id] === undefined);
+  inRoute.sort((a,b) => routeIndex[a.id] - routeIndex[b.id]);
+  return { sorted: [...inRoute, ...newItems], newItems, routeName: store };
+}
+
+function toggleBought(itemId){
+  finalListBoughtState = _loadBoughtState();
+  if(finalListBoughtState[itemId]){
+    delete finalListBoughtState[itemId];
+  } else {
+    finalListBoughtState[itemId] = true;
+  }
+  _saveBoughtState(finalListBoughtState);
+  // Update row visually without full re-render
+  const row = document.getElementById('flrow-' + itemId);
+  const toggle = document.getElementById('fltoggle-' + itemId);
+  if(row){
+    row.classList.toggle('bought', !!finalListBoughtState[itemId]);
+  }
+  if(toggle){
+    toggle.classList.toggle('checked', !!finalListBoughtState[itemId]);
+    toggle.querySelector('.fi-bought-toggle-icon').textContent = finalListBoughtState[itemId] ? '✓' : '';
+  }
+  // Update subtitle count
+  _updateFinalSubtitle();
+}
+
+function _updateFinalSubtitle(){
+  const subEl = document.getElementById('shop-sub-text');
+  const total = Object.keys(finalListCache).length;
+  const bought = Object.keys(finalListBoughtState).filter(id => finalListCache[id] !== undefined && finalListBoughtState[id]).length;
+  if(bought > 0){
+    subEl.textContent = `${bought} of ${total} bought · ${total - bought} remaining`;
+  } else {
+    subEl.textContent = `${total} item${total!==1?'s':''} to buy`;
+  }
+}
+
+function setFinalMode(mode){
+  finalListMode = mode;
+  renderFinalList();
+}
+
 function renderFinalList(){
+  finalListBoughtState = _loadBoughtState();
   const scroll = document.getElementById('shop-scroll');
   scroll.innerHTML = '';
   const subEl = document.getElementById('shop-sub-text');
@@ -3136,7 +3281,6 @@ function renderFinalList(){
   const meta = window._finalItemMeta || {};
 
   // Rebuild meta for items already in cache from a previous session load
-  // (meta is populated when user confirms items; on page reload we rebuild from ALL_ITEMS)
   if(!window._finalItemMeta){
     window._finalItemMeta = {};
     ALL_ITEMS.forEach(item => {
@@ -3185,56 +3329,349 @@ function renderFinalList(){
     return { ...item, qty: finalListCache[id], note: (state[id]||{}).note || item.note || '' };
   });
 
-  // Sort: by subcategory alphabetically, then by name
-  allConfirmed.sort((a,b) => {
-    const sc = (a.subcat||'').localeCompare(b.subcat||'');
-    if(sc !== 0) return sc;
-    return a.name.localeCompare(b.name);
-  });
+  // ── MODE BAR (shop / reorder) ──
+  const modeBar = document.createElement('div');
+  modeBar.className = 'final-mode-bar';
+  modeBar.innerHTML = `
+    <button class="final-mode-btn ${finalListMode==='shop'?'active':''}" onclick="setFinalMode('shop')">🛒 Shopping</button>
+    <button class="final-mode-btn ${finalListMode==='reorder'?'active':''}" onclick="setFinalMode('reorder')">↕ Reorder</button>`;
+  scroll.appendChild(modeBar);
 
-  subEl.textContent = `${confirmedIds.length} item${confirmedIds.length!==1?'s':''} to buy`;
+  // ── REORDER MODE ──
+  if(finalListMode === 'reorder'){
+    _renderReorderMode(scroll, allConfirmed);
+    return;
+  }
 
-  // Group by subcat
-  const subcatOrder = [];
-  const subcatMap = {};
-  allConfirmed.forEach(item => {
-    const sc = item.subcat || '';
-    if(!subcatMap[sc]){ subcatMap[sc]=[]; subcatOrder.push(sc); }
-    subcatMap[sc].push(item);
-  });
+  // ── SHOP MODE ──
 
-  subcatOrder.forEach(sc => {
-    if(sc){
-      const hdr = document.createElement('div');
-      hdr.className = 'final-subcat-hdr';
-      hdr.textContent = sc;
-      scroll.appendChild(hdr);
-    }
-    subcatMap[sc].forEach(item => {
-      const row = document.createElement('div');
-      row.className = 'final-item';
-      row.innerHTML = `
-        <div class="final-item-qty">${item.qty}</div>
-        <div style="flex:1;min-width:0;">
-          <div class="final-item-name">${item.name}</div>
-          ${item.note?`<div class="final-item-subcat">📝 ${item.note}</div>`:''}
-        </div>
-        <button onclick="removeFinalItem('${item.id}')" style="border:none;background:var(--terra-light);color:var(--terra);width:32px;height:32px;border-radius:8px;font-size:16px;cursor:pointer;flex-shrink:0;">✕</button>`;
-      scroll.appendChild(row);
+  // Determine dominant store for route lookup
+  const storeCounts = {};
+  allConfirmed.forEach(i => { const s = i.store||'Supermarket'; storeCounts[s] = (storeCounts[s]||0)+1; });
+  const dominantStore = Object.entries(storeCounts).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'Supermarket';
+
+  const hasRoute = !!_getRoute(dominantStore);
+
+  // ── ORDER TOGGLE (only visible when a route exists) ──
+  if(hasRoute){
+    const toggleWrap = document.createElement('div');
+    toggleWrap.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 14px 6px;';
+    toggleWrap.innerHTML = `
+      <span style="font-size:12px;font-weight:700;color:var(--charcoal-mid);">Order:</span>
+      <div style="display:flex;background:var(--blush);border:2px solid var(--blush-mid);border-radius:20px;overflow:hidden;">
+        <button onclick="setOrderMode('route')" style="padding:6px 14px;border:none;font-family:var(--font);font-size:12px;font-weight:800;cursor:pointer;transition:all 0.15s;background:${finalListOrderMode==='route'?'var(--charcoal)':'transparent'};color:${finalListOrderMode==='route'?'white':'var(--mid)'};">🗺️ Route</button>
+        <button onclick="setOrderMode('category')" style="padding:6px 14px;border:none;font-family:var(--font);font-size:12px;font-weight:800;cursor:pointer;transition:all 0.15s;background:${finalListOrderMode==='category'?'var(--charcoal)':'transparent'};color:${finalListOrderMode==='category'?'white':'var(--mid)'};">📂 Category</button>
+      </div>`;
+    scroll.appendChild(toggleWrap);
+  }
+
+  // ── CATEGORY MODE (or no route) ──
+  if(!hasRoute || finalListOrderMode === 'category'){
+    allConfirmed.sort((a,b) => {
+      const sc = (a.subcat||'').localeCompare(b.subcat||'');
+      if(sc !== 0) return sc;
+      return a.name.localeCompare(b.name);
     });
-  });
+    const subcatOrder2 = [];
+    const subcatMap2 = {};
+    allConfirmed.forEach(item => {
+      const sc = item.subcat || '';
+      if(!subcatMap2[sc]){ subcatMap2[sc]=[]; subcatOrder2.push(sc); }
+      subcatMap2[sc].push(item);
+    });
+    _updateFinalSubtitle();
+    subcatOrder2.forEach(sc => {
+      if(sc){
+        const hdr = document.createElement('div');
+        hdr.className = 'final-subcat-hdr';
+        hdr.textContent = sc;
+        scroll.appendChild(hdr);
+      }
+      subcatMap2[sc].forEach(item => _appendFinalItemRow(scroll, item, false));
+    });
+    _appendFinalActions(scroll);
+    return;
+  }
 
-  // Save + Share button area
+  // ── ROUTE MODE ──
+  const { sorted: sortedItems, newItems } = _applyRoute(dominantStore, allConfirmed);
+  const routeMeta = _getRouteMeta(dominantStore);
+  const routeLabel = routeMeta ? routeMeta.name : dominantStore;
+
+  // Route applied banner
+  const routeBanner = document.createElement('div');
+  routeBanner.className = 'route-applied-banner';
+  routeBanner.innerHTML = `<span style="font-size:18px;">🗺️</span><span class="rab-label">${routeLabel}</span>`;
+  scroll.appendChild(routeBanner);
+
+  if(newItems.length > 0){
+    const newBanner = document.createElement('div');
+    newBanner.className = 'route-new-items-banner';
+    newBanner.innerHTML = `⚠️ ${newItems.length} new item${newItems.length!==1?'s':''} not yet in route — shown at bottom. Switch to Reorder to place them.`;
+    scroll.appendChild(newBanner);
+  }
+
+  _updateFinalSubtitle();
+  const routeIds = _getRoute(dominantStore) || [];
+  sortedItems.forEach(item => {
+    const isNew = !routeIds.includes(item.id);
+    _appendFinalItemRow(scroll, item, false, isNew);
+  });
+  _appendFinalActions(scroll);
+}
+
+function setOrderMode(mode){
+  finalListOrderMode = mode;
+  renderFinalList();
+}
+
+function _appendFinalItemRow(container, item, isReorder, isNewInRoute){
+  const isBought = !!finalListBoughtState[item.id];
+  const row = document.createElement('div');
+  row.className = 'final-item' + (isBought ? ' bought' : '') + (isReorder ? ' reorder-mode' : '');
+  row.id = 'flrow-' + item.id;
+  row.dataset.itemId = item.id;
+
+  if(isReorder){
+    row.setAttribute('draggable','true');
+    row.innerHTML = `
+      <div class="fi-drag-handle" title="Drag to reorder">⠿</div>
+      <div class="final-item-qty">${item.qty}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="final-item-name">${item.name}${isNewInRoute?'<span class="fi-new-badge">NEW</span>':''}</div>
+        ${item.note?`<div class="final-item-subcat">📝 ${item.note}</div>`:''}
+      </div>`;
+    _attachDragEvents(row);
+  } else {
+    row.innerHTML = `
+      <div class="fi-bought-toggle ${isBought?'checked':''}" id="fltoggle-${item.id}" onclick="toggleBought('${item.id}')">
+        <span class="fi-bought-toggle-icon">${isBought?'✓':''}</span>
+      </div>
+      <div class="final-item-qty">${item.qty}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="final-item-name">${item.name}${isNewInRoute?'<span class="fi-new-badge">NEW</span>':''}</div>
+        ${item.note?`<div class="final-item-subcat">📝 ${item.note}</div>`:''}
+      </div>
+      <button onclick="removeFinalItem('${item.id}')" style="border:none;background:var(--terra-light);color:var(--terra);width:32px;height:32px;border-radius:8px;font-size:16px;cursor:pointer;flex-shrink:0;">✕</button>`;
+  }
+  container.appendChild(row);
+}
+
+function _appendFinalActions(container){
   const actionsWrap = document.createElement('div');
   actionsWrap.style.cssText = 'display:flex;gap:10px;margin:16px 0 80px;';
   actionsWrap.innerHTML = `
     <button onclick="saveFinalListToSheet()" style="flex:1;padding:16px;border:none;border-radius:var(--radius);background:var(--charcoal);color:white;font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer;">💾 Save List</button>
     <button onclick="shareFinalList()" style="flex:1;padding:16px;border:none;border-radius:var(--radius);background:linear-gradient(135deg,var(--sage),var(--sage-dark));color:white;font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer;">Share 📤</button>`;
-  scroll.appendChild(actionsWrap);
+  container.appendChild(actionsWrap);
+}
+
+// ── v35: REORDER MODE RENDERER ────────────────────────────────────────────────
+function _renderReorderMode(scroll, allConfirmed){
+  const meta = window._finalItemMeta || {};
+
+  // Determine dominant store for route context
+  const storeCounts = {};
+  allConfirmed.forEach(i => { const s = i.store||'Supermarket'; storeCounts[s] = (storeCounts[s]||0)+1; });
+  const dominantStore = Object.entries(storeCounts).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'Supermarket';
+
+  const existingRoute = _getRoute(dominantStore);
+  const routeIndex = {};
+  if(existingRoute) existingRoute.forEach((id,i) => { routeIndex[id] = i; });
+
+  // Sort: items in route first by position, then new items by name
+  const inRoute = allConfirmed.filter(i => routeIndex[i.id] !== undefined);
+  const newItems = allConfirmed.filter(i => routeIndex[i.id] === undefined);
+  inRoute.sort((a,b) => routeIndex[a.id] - routeIndex[b.id]);
+  newItems.sort((a,b) => a.name.localeCompare(b.name));
+  const orderedItems = [...inRoute, ...newItems];
+
+  // Info banner
+  const info = document.createElement('div');
+  info.style.cssText = 'background:var(--blush);border:1.5px solid var(--blush-mid);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:10px;font-size:12px;font-weight:600;color:var(--charcoal-mid);display:flex;align-items:center;gap:8px;';
+  info.innerHTML = `<span style="font-size:18px;">↕️</span><span>Drag the <strong>⠿</strong> handle to reorder. Tap <strong>"Save as Route"</strong> to remember this order for ${dominantStore}.</span>`;
+  scroll.appendChild(info);
+
+  if(newItems.length > 0){
+    const newBanner = document.createElement('div');
+    newBanner.className = 'route-new-items-banner';
+    newBanner.innerHTML = `⚠️ ${newItems.length} new item${newItems.length!==1?'s':''} not yet in route — shown at bottom`;
+    scroll.appendChild(newBanner);
+  }
+
+  // Drag list container
+  const listEl = document.createElement('div');
+  listEl.id = 'reorder-list';
+  orderedItems.forEach(item => {
+    const isNew = routeIndex[item.id] === undefined;
+    _appendFinalItemRow(listEl, item, true, isNew);
+  });
+  scroll.appendChild(listEl);
+
+  // Save as Route button
+  const saveRouteWrap = document.createElement('div');
+  saveRouteWrap.style.cssText = 'margin:14px 0 6px;';
+  saveRouteWrap.innerHTML = `<button onclick="saveCurrentOrderAsRoute('${dominantStore}')" class="route-save-btn" style="width:100%;padding:15px;font-size:15px;">🗺️ Save as ${dominantStore} Route</button>`;
+  scroll.appendChild(saveRouteWrap);
+
+  // Also show save + share at bottom
+  _appendFinalActions(scroll);
+}
+
+// ── v35: DRAG AND DROP ────────────────────────────────────────────────────────
+let _dragSrc = null;
+
+function _attachDragEvents(row){
+  // Touch drag for mobile
+  let touchStartY = 0;
+  let touchCurrentY = 0;
+  let touchDragging = false;
+  let placeholder = null;
+
+  const handle = row.querySelector('.fi-drag-handle');
+  if(!handle) return;
+
+  // Mouse drag (desktop)
+  row.addEventListener('dragstart', e => {
+    _dragSrc = row;
+    row.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  row.addEventListener('dragend', () => {
+    row.classList.remove('dragging');
+    document.querySelectorAll('.final-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+    _dragSrc = null;
+  });
+  row.addEventListener('dragover', e => {
+    e.preventDefault();
+    if(_dragSrc && _dragSrc !== row){
+      document.querySelectorAll('.final-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+      row.classList.add('drag-over');
+    }
+  });
+  row.addEventListener('drop', e => {
+    e.preventDefault();
+    if(_dragSrc && _dragSrc !== row){
+      const list = row.parentNode;
+      const children = [...list.children];
+      const srcIdx = children.indexOf(_dragSrc);
+      const tgtIdx = children.indexOf(row);
+      if(srcIdx < tgtIdx){ list.insertBefore(_dragSrc, row.nextSibling); }
+      else { list.insertBefore(_dragSrc, row); }
+      row.classList.remove('drag-over');
+    }
+  });
+
+  // Touch drag (mobile — use handle only)
+  handle.addEventListener('touchstart', e => {
+    touchStartY = e.touches[0].clientY;
+    touchDragging = false;
+  }, { passive: true });
+
+  handle.addEventListener('touchmove', e => {
+    touchCurrentY = e.touches[0].clientY;
+    const deltaY = touchCurrentY - touchStartY;
+    if(!touchDragging && Math.abs(deltaY) > 6){
+      touchDragging = true;
+      row.classList.add('dragging');
+      placeholder = document.createElement('div');
+      placeholder.style.cssText = `height:${row.offsetHeight}px;border:2px dashed var(--sage-mid);border-radius:var(--radius-sm);margin-bottom:6px;background:var(--sage-light);`;
+      row.parentNode.insertBefore(placeholder, row.nextSibling);
+      document.body.style.overflow = 'hidden';
+    }
+    if(touchDragging){
+      e.preventDefault();
+      row.style.position = 'fixed';
+      row.style.zIndex = '9999';
+      row.style.width = (row.parentNode.offsetWidth || 340) + 'px';
+      row.style.top = (touchCurrentY - row.offsetHeight/2) + 'px';
+      row.style.left = (row.parentNode.getBoundingClientRect().left) + 'px';
+      row.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)';
+
+      // Find the element at touch point
+      row.style.pointerEvents = 'none';
+      const elBelow = document.elementFromPoint(e.touches[0].clientX, touchCurrentY);
+      row.style.pointerEvents = '';
+      const targetRow = elBelow ? elBelow.closest('.final-item') : null;
+      if(targetRow && targetRow !== row && targetRow !== placeholder){
+        const rect = targetRow.getBoundingClientRect();
+        const mid = rect.top + rect.height/2;
+        if(touchCurrentY < mid){
+          targetRow.parentNode.insertBefore(placeholder, targetRow);
+        } else {
+          targetRow.parentNode.insertBefore(placeholder, targetRow.nextSibling);
+        }
+      }
+    }
+  }, { passive: false });
+
+  handle.addEventListener('touchend', () => {
+    if(touchDragging){
+      row.style.position = '';
+      row.style.zIndex = '';
+      row.style.width = '';
+      row.style.top = '';
+      row.style.left = '';
+      row.style.boxShadow = '';
+      row.classList.remove('dragging');
+      if(placeholder && placeholder.parentNode){
+        placeholder.parentNode.insertBefore(row, placeholder);
+        placeholder.remove();
+      }
+      document.body.style.overflow = '';
+      touchDragging = false;
+      placeholder = null;
+    }
+  });
+}
+
+// ── v35: SAVE CURRENT ORDER AS ROUTE ─────────────────────────────────────────
+function saveCurrentOrderAsRoute(store){
+  const listEl = document.getElementById('reorder-list');
+  if(!listEl){ showToast('Nothing to save'); return; }
+  const rows = [...listEl.querySelectorAll('.final-item[data-item-id]')];
+  const orderedIds = rows.map(r => r.dataset.itemId).filter(Boolean);
+  if(!orderedIds.length){ showToast('Nothing to save'); return; }
+
+  // Prompt for an optional description to append to the route name
+  const existing = _getRouteMeta(store);
+  const defaultName = existing ? existing.name : store;
+  const desc = window.prompt(`Name this ${store} route:\n(e.g. "Tekka Market" or "Sheng Siong")`, defaultName);
+  if(desc === null) return; // user cancelled
+  const routeName = desc.trim() || store;
+
+  // Save locally
+  _saveRouteLocal(store, orderedIds, routeName);
+
+  // POST to Sheet (non-blocking)
+  const url = localStorage.getItem(KEY_URL);
+  const user = localStorage.getItem(KEY_USER) || 'Helper';
+  if(url){
+    androidSafePost(url, {
+      action: 'saveroute',
+      store,
+      name: routeName,
+      savedBy: user,
+      itemOrder: orderedIds,
+    }).then(() => {
+      showToast(`✓ "${routeName}" route saved!`);
+    }).catch(() => {
+      showToast(`✓ Route saved locally (sheet sync failed)`);
+    });
+  } else {
+    showToast(`✓ "${routeName}" route saved!`);
+  }
+
+  // Switch back to shop mode so they see the route in action
+  finalListMode = 'shop';
+  finalListOrderMode = 'route'; // snap back to route view
+  renderFinalList();
 }
 
 function removeFinalItem(itemId){
   delete finalListCache[itemId];
+  delete finalListBoughtState[itemId];
+  _saveBoughtState(finalListBoughtState);
   // Also un-confirm the button on the pre-checklist if it's still in DOM
   const btn = document.getElementById('psc-confirm-'+itemId);
   const row = document.getElementById('shoprow-'+itemId);
@@ -3344,6 +3781,7 @@ async function openFinalListPicker(){
       opt.innerHTML = `<div class="flp-title">${fl.label}</div><div class="flp-meta">${fl.itemCount} items · ${fl.created || fl.createdAt || ''}</div>`;
       opt.onclick = () => {
         finalListCache = {};
+        finalListBoughtState = {}; _saveBoughtState({});
         window._finalItemMeta = {};
         (fl.items||[]).forEach(i => {
           const key = i.itemId || i.id;
