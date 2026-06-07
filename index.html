@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v37</title>
+<title>Home Inventory v38</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -616,8 +616,8 @@
 <!-- ══════════ HOME ══════════ -->
 <div id="view-home" class="view active">
   <div class="home-hero">
-    <div class="eyebrow">Home Inventory</div>
-    <h1>Stock Check <span id="app-version-badge" style="font-size:14px;font-weight:600;color:var(--violet-dark);opacity:0.7;vertical-align:middle;letter-spacing:0.5px;"></span></h1>
+    <div class="eyebrow" id="home-eyebrow">—</div>
+    <h1>Home Inventory Check <span id="app-version-badge" style="font-size:14px;font-weight:600;color:var(--violet-dark);opacity:0.7;vertical-align:middle;letter-spacing:0.5px;"></span></h1>
     <div class="subtitle" id="hero-subtitle">Connect to begin</div>
     <div class="home-hero-actions">
       <div id="sync-badge" class="sync-badge synced" onclick="manualSync()">✓ Synced</div>
@@ -703,7 +703,6 @@
     <div class="header-row">
       <button class="back-btn" onclick="goHome()">←</button>
       <div class="header-title">
-        <div class="header-eyebrow">Configuration</div>
         <div class="header-h2">Settings</div>
       </div>
     </div>
@@ -752,7 +751,7 @@
     <div class="room-header-top">
       <button class="back-btn" onclick="goHome()">←</button>
       <div class="header-title">
-        <div class="header-eyebrow" id="room-eyebrow">Room</div>
+        <div class="header-eyebrow" id="room-eyebrow">Sweep Location</div>
         <div class="header-h2" id="room-title-text">—</div>
       </div>
     </div>
@@ -1012,6 +1011,7 @@ let adhocJustSubmitted = false; // v34: skip sweep picker after ad hoc submit
 // ═══════════════════════════════════════════════════════════
 async function boot() {
   document.getElementById('app-version-badge').textContent = APP_VERSION;
+  document.getElementById('home-eyebrow').textContent = new Date().toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
   loadLocalState();
   loadSettings();
   loadAdhocOnBoot();
@@ -1984,7 +1984,7 @@ function openRoom(roomId){
   showAllItems = false; // v12: always start in must-only mode when sweep is active
   const room=ROOMS.find(r=>r.id===roomId);
   if(!room) return;
-  document.getElementById('room-eyebrow').textContent=room.icon+'  '+room.name;
+  document.getElementById('room-eyebrow').textContent='Sweep Location';
   document.getElementById('room-title-text').textContent=room.name;
   renderRoomItems(room);
   updateDoneButton();
