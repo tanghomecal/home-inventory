@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v38</title>
+<title>Home Inventory v39</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -111,6 +111,23 @@
   .use-last-btn:active{background:var(--teal-mid);}
   .use-last-btn .usl-arrow{font-size:14px;}
   .use-last-btn .usl-num{font-family:var(--mono);font-size:15px;font-weight:800;}
+  /* v39: Final List — sweep context header */
+  .final-sweep-ctx{margin:10px 14px 4px;padding:12px 14px;background:var(--violet-light);border:2px solid var(--violet-mid);border-radius:12px;}
+  .fsc-eyebrow{font-size:10px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:var(--violet-dark);margin-bottom:4px;}
+  .fsc-main{font-size:14px;font-weight:800;color:var(--charcoal);font-family:var(--mono);}
+  .fsc-sub{font-size:12px;font-weight:600;color:var(--charcoal-mid);margin-top:2px;}
+  /* v39: Final List — store segment bar */
+  .final-store-seg{display:flex;gap:8px;padding:10px 14px 4px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .final-store-seg::-webkit-scrollbar{display:none;}
+  .fss-btn{display:flex;align-items:center;gap:7px;flex-shrink:0;padding:9px 14px;border:2px solid var(--blush-mid);border-radius:20px;background:var(--white);color:var(--mid);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;transition:all 0.15s;}
+  .fss-btn.active{font-weight:800;box-shadow:var(--shadow-sm);}
+  .fss-icon{font-size:15px;}
+  .fss-count{font-family:var(--mono);font-size:12px;font-weight:800;opacity:0.75;}
+  /* v39: Push to buy — pre-shopping checklist row */
+  .psc-push-row{margin-top:8px;}
+  .psc-push-btn{border:2px solid var(--sky-mid);border-radius:10px;background:var(--sky-light);color:var(--sky-dark);font-family:var(--font);font-size:12px;font-weight:800;padding:8px 14px;cursor:pointer;transition:all 0.15s;}
+  .psc-push-btn:active{background:var(--sky-mid);}
+  .psc-push-btn.on-list{background:var(--teal-light);border-color:var(--teal-mid);color:var(--teal-dark);}
   /* Push to buy */
   .push-buy-btn{width:100%;border:2px solid var(--sky-mid);border-radius:10px;background:var(--sky-light);color:var(--sky-dark);font-family:var(--font);font-size:12px;font-weight:700;padding:9px 4px;cursor:pointer;text-align:center;transition:all 0.15s;box-sizing:border-box;}
   .push-buy-btn:active{background:var(--sky-mid);}
@@ -986,6 +1003,9 @@ const KEY_FINAL_FOR_SWEEP  = 'inv_finalForSweep';   // sweepId of the sweep that
 // v32 keys
 const KEY_PRELIM_SWEEP_ID  = 'inv_prelimSweepId';   // sweepId whose prelim state is currently loaded in-memory
 const KEY_ROUTES           = 'inv_routes';            // v36: {store: {routeId,name,savedBy,savedAt,itemOrder:[]}}
+// v39 keys — final lists are now scoped to a sweep and split by store
+const KEY_ACTIVE_SWEEP_ID  = 'inv_activeFinalSweepId'; // sweepId whose final list is loaded in-memory
+const KEY_FINAL_STORE      = 'inv_finalStore';         // last-viewed store segment on the Final List tab
 
 // Item data — loaded from Google Sheets (no hardcoded items)
 let ROOMS     = [];
@@ -1380,7 +1400,7 @@ async function fetchLatestFinalListFromSheet(url) {
     if (!lists.length) return;
 
     // Update local cache with full list from Sheet (used by openFinalListPicker)
-    localStorage.setItem(KEY_FINAL_LIST, JSON.stringify(lists.slice(-10)));
+    _saveFinalListsCache(lists);
 
     // v32 FIX: Do NOT auto-load into finalListCache here.
     // Doing so overwrites the prelim session state on a second device and
@@ -1393,8 +1413,10 @@ async function fetchLatestFinalListFromSheet(url) {
     if (localDone) {
       try {
         const doneInfo = JSON.parse(localDone);
-        const latest = lists[0];
-        if (doneInfo.sweepId && latest && latest.createdAt) {
+        // v39 FIX: previously any saved list at all suppressed the banner, so a
+        // brand-new sweep looked as though its final list was already done.
+        const matched = lists.some(fl => fl.sweepId && fl.sweepId === doneInfo.sweepId);
+        if (doneInfo.sweepId && matched) {
           localStorage.setItem(KEY_FINAL_FOR_SWEEP, doneInfo.sweepId);
           hideSweepDoneBanner();
         }
@@ -2416,9 +2438,9 @@ function buildItemCard(item){
          <span class="usl-num">${lastQty}</span>
        </button>`
     : '';
-  const pushBuyHtml2 = isForceBuy
-    ? `<button class="push-buy-btn on-list" onclick="pushToBuy('${item.id}',event)">🛒 On list</button>`
-    : `<button class="push-buy-btn" onclick="pushToBuy('${item.id}',event)">🛒 Push to buy</button>`;
+  // v39: Push to Buy has moved to the Pre-Shopping Checklist. During a sweep the
+  // inventory person records what is on the shelf — deciding what to buy is the
+  // shopper's job. A 🛒 marker still shows if the shopper already requested the item.
   const uncheckHtml2 = isChecked
     ? `<button class="uncheck-btn" onclick="uncheckItem('${item.id}',event)">✕ Uncheck</button>`
     : '';
@@ -2438,7 +2460,6 @@ function buildItemCard(item){
       <div class="card-actions">
         ${buildClusterHTML(item.id,qty)}
         ${useLastHtml}
-        ${pushBuyHtml2}
         ${uncheckHtml2}
       </div>
     </div>
@@ -2451,6 +2472,8 @@ function buildItemCard(item){
   return card;
 }
 
+// v39: Push to Buy now lives on the Pre-Shopping Checklist only.
+// It flags an item as shopper-requested (🛒 REQUESTED) regardless of stock level.
 function pushToBuy(itemId, e) {
   if(e) e.stopPropagation();
   if(!state[itemId]) state[itemId]={qty:null,note:''};
@@ -2462,6 +2485,19 @@ function pushToBuy(itemId, e) {
   saveState();
   const item=ITEM_MAP[itemId];
   if(!item) return;
+
+  // Pre-Shopping Checklist context — re-render the checklist and sync
+  const shopRow = document.getElementById('shoprow-'+itemId);
+  if(shopRow){
+    showToast(state[itemId].forceBuy
+      ? `🛒 ${item.name} requested`
+      : `Request removed from ${item.name}`);
+    renderShoppingList();
+    syncPrelimToSheet();
+    return;
+  }
+
+  // Legacy room-card context (button no longer rendered, kept for safety)
   const oldCard=document.getElementById('card-'+itemId);
   if(oldCard) oldCard.replaceWith(buildItemCard(item));
   updateRoomProgressFromState();
@@ -2624,7 +2660,12 @@ function openSweepPicker(sweeps, url){
       <div class="sweep-option-counts">${isAdhoc ? '🛍️ Ad Hoc list' : '✓ ' + sw.itemsChecked + ' items checked'} · ${sw.itemsNeeded} items</div>`;
     option.onclick = () => {
       closeSweepPicker();
+      // v39 FIX: a different sweep means a different final list. Without this the
+      // previous sweep's confirmed items and ticks carried over — the "old shopping
+      // list keeps showing up" bug, worst when two sweeps run on the same day.
+      const switched = _resetFinalListForSweep(sw.sweepId);
       currentSweepMeta = sw;
+      if(switched) switchShopTab('prechecklist');
       _fetchStockAndRender(url);
     };
     container.appendChild(option);
@@ -2687,6 +2728,7 @@ function _openRegenPicker(sweeps, url){
       if(titleEl) titleEl.textContent = 'Which sweep to view?';
       if(subEl)   subEl.textContent   = 'Choose a sweep to load the pre-shopping checklist';
       // Clear current final list — the user is starting fresh from this sweep
+      _resetFinalListForSweep(sw.sweepId);
       finalListCache = {}; finalListBoughtState = {}; _saveBoughtState({});
       window._finalItemMeta = {};
       currentSweepMeta = sw;
@@ -3015,10 +3057,18 @@ function renderShoppingList(){
           : Math.max(1, minStockForItem - curQty);
         const invClass = curQty === 0 ? 'zero' : curQty <= (item.min||1) ? 'low' : 'ok';
         // Credibility label
+        // v39: three-way — ★ VERIFIED (mandatory, counted) / 🛒 REQUESTED (pushed
+        // to buy by the shopper) / REPORTED (recorded but not mandatory)
         const isForcedBuy = !!(state[item.id]||{}).forceBuy;
         const credLabel = item.must
           ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;background:var(--sky-light);color:var(--sky-dark);border:1.5px solid #F5C870;padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">★ VERIFIED</span>`
-          : `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;background:var(--sky-light);color:var(--sky-dark);border:1.5px solid #AABFEE;padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">🛒 REQUESTED</span>`;
+          : isForcedBuy
+          ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;background:var(--sky-light);color:var(--sky-dark);border:1.5px solid #AABFEE;padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">🛒 REQUESTED</span>`
+          : `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;background:var(--blush);color:var(--mid);border:1.5px solid var(--blush-mid);padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">REPORTED</span>`;
+        // v39: Push to Buy toggle — moved here from the sweep item card
+        const pushBuyHtml = isForcedBuy
+          ? `<button class="psc-push-btn on-list" onclick="pushToBuy('${item.id}',event)">🛒 Requested</button>`
+          : `<button class="psc-push-btn" onclick="pushToBuy('${item.id}',event)">🛒 Push to buy</button>`;
 
         row.innerHTML=`
           <div style="flex:1;min-width:0;">
@@ -3052,6 +3102,7 @@ function renderShoppingList(){
                 ${isAlreadyConfirmed?'On Final List':'Add to Final List'}
               </button>
             </div>
+            <div class="psc-push-row">${pushBuyHtml}</div>
             ${note?`<span class="shop-note-text" style="margin-top:8px;">📝 ${note}</span>`:''}
           </div>`;
         scBody.appendChild(row);
@@ -3179,13 +3230,71 @@ let finalListOrderMode = 'route'; // 'route' | 'category' — session-only toggl
 let finalListBoughtState = {}; // {itemId: true} — persisted to localStorage
 let finalListCustomOrder = null; // null = use default sort; array of itemIds = custom order
 const KEY_BOUGHT_STATE = 'inv_boughtState';
+let finalListStore = null;  // v39: active store segment on the Final List tab
 // KEY_ROUTE_PREFIX removed in v36 — routes now cached under KEY_ROUTES per store
 
+// ── v39: SWEEP SCOPING ───────────────────────────────────────────────────────
+// Everything on the Final List tab belongs to exactly one sweep. Two sweeps run
+// on the same day are two different scopes and never share ticked-off items.
+function _activeScopeId(){
+  if(currentSweepMeta && currentSweepMeta.sweepId) return currentSweepMeta.sweepId;
+  try {
+    const done = JSON.parse(localStorage.getItem(KEY_SWEEP_DONE)||'{}');
+    if(done.sweepId) return done.sweepId;
+  } catch(e){}
+  return 'local';
+}
+
+// Clears the in-memory final list when the user moves to a different sweep.
+// This is the fix for old lists bleeding into a new sweep's Final List tab.
+function _resetFinalListForSweep(sweepId){
+  const scope = sweepId || 'local';
+  if(localStorage.getItem(KEY_ACTIVE_SWEEP_ID) === scope) return false;
+  finalListCache = {};
+  window._finalItemMeta = {};
+  finalListBoughtState = {};
+  finalListStore = null;
+  finalListCustomOrder = null;
+  localStorage.setItem(KEY_ACTIVE_SWEEP_ID, scope);
+  return true;
+}
+
+// Bought state is stored as {scopeId: {itemId: true}} so each sweep keeps its own ticks.
 function _loadBoughtState(){
-  try { return JSON.parse(localStorage.getItem(KEY_BOUGHT_STATE)||'{}'); } catch(e){ return {}; }
+  try {
+    const all = JSON.parse(localStorage.getItem(KEY_BOUGHT_STATE)||'{}');
+    const scoped = all[_activeScopeId()];
+    // Migrate the old flat {itemId:true} shape on first read
+    if(!scoped && Object.values(all).every(v => v === true)) return {...all};
+    return scoped || {};
+  } catch(e){ return {}; }
 }
 function _saveBoughtState(s){
-  localStorage.setItem(KEY_BOUGHT_STATE, JSON.stringify(s));
+  let all = {};
+  try {
+    const raw = JSON.parse(localStorage.getItem(KEY_BOUGHT_STATE)||'{}');
+    if(!Object.values(raw).every(v => v === true)) all = raw;
+  } catch(e){}
+  all[_activeScopeId()] = s;
+  localStorage.setItem(KEY_BOUGHT_STATE, JSON.stringify(all));
+}
+
+// v39: canonical ordering — newest first, whatever the source.
+// The Sheet returns newest-first while local saves appended oldest-last, which is
+// why "Last saved" and the picker were both showing stale lists.
+function _normaliseFinalLists(lists){
+  return [...(lists||[])]
+    .filter(fl => fl && (fl.listId || fl.label))
+    .sort((a,b) => String(b.createdAt||b.listId||'').localeCompare(String(a.createdAt||a.listId||'')));
+}
+
+const STORE_META = {
+  'Supermarket': { icon:'🛒', bg:'var(--sage-light)',  fg:'var(--sage-dark)',  border:'var(--sage-mid)' },
+  'Wet Market':  { icon:'🥬', bg:'var(--teal-light)',  fg:'var(--teal-dark)',  border:'var(--teal-mid)' },
+  'Online':      { icon:'💻', bg:'var(--sky-light)',   fg:'var(--sky-dark)',   border:'var(--sky-mid)'  },
+};
+function _storeMeta(store){
+  return STORE_META[store] || { icon:'🛍️', bg:'var(--blush)', fg:'var(--charcoal-mid)', border:'var(--blush-mid)' };
 }
 // ── v36: Sheet-backed route cache ────────────────────────────────────────────
 // Routes are fetched from Sheet on boot and cached in localStorage under KEY_ROUTES.
@@ -3268,14 +3377,29 @@ function toggleBought(itemId){
   _updateFinalSubtitle();
 }
 
+// v39: switch the visible store segment on the Final List tab
+function setFinalStore(store){
+  finalListStore = store;
+  localStorage.setItem(KEY_FINAL_STORE, store);
+  finalListCustomOrder = null;
+  renderFinalList();
+}
+
+// v39: counts are scoped to the store segment on screen, not the whole cache
 function _updateFinalSubtitle(){
   const subEl = document.getElementById('shop-sub-text');
-  const total = Object.keys(finalListCache).length;
-  const bought = Object.keys(finalListBoughtState).filter(id => finalListCache[id] !== undefined && finalListBoughtState[id]).length;
+  const inScope = Object.keys(finalListCache).filter(id => {
+    if(!finalListStore) return true;
+    const item = ITEM_MAP[id] || (window._finalItemMeta||{})[id] || {};
+    return (item.store || 'Supermarket') === finalListStore;
+  });
+  const total  = inScope.length;
+  const bought = inScope.filter(id => finalListBoughtState[id]).length;
+  const prefix = finalListStore ? `${_storeMeta(finalListStore).icon} ` : '';
   if(bought > 0){
-    subEl.textContent = `${bought} of ${total} bought · ${total - bought} remaining`;
+    subEl.textContent = `${prefix}${bought} of ${total} bought · ${total - bought} remaining`;
   } else {
-    subEl.textContent = `${total} item${total!==1?'s':''} to buy`;
+    subEl.textContent = `${prefix}${total} item${total!==1?'s':''} to buy`;
   }
 }
 
@@ -3306,10 +3430,23 @@ function renderFinalList(){
     });
   }
 
-  // Show any previously saved final list banner
+  // v39: Sweep context header — makes it unmistakable which sweep this list is for.
+  // Two sweeps on the same day now read differently at a glance.
+  const ctx = document.createElement('div');
+  ctx.className = 'final-sweep-ctx';
+  ctx.innerHTML = currentSweepMeta
+    ? `<div class="fsc-eyebrow">Building from sweep</div>
+       <div class="fsc-main">📅 ${currentSweepMeta.date} · ${currentSweepMeta.time}</div>
+       <div class="fsc-sub">by ${currentSweepMeta.by || '—'} · ${currentSweepMeta.scope || 'All stores'}</div>`
+    : `<div class="fsc-eyebrow">Working list</div>
+       <div class="fsc-main">Not linked to a sweep</div>
+       <div class="fsc-sub">Load a sweep from the Pre-Shopping tab to link it</div>`;
+  scroll.appendChild(ctx);
+
+  // Show the most recent saved list — v39: newest-first ordering is now guaranteed
   const savedFinalLists = _getSavedFinalLists();
   if(savedFinalLists.length > 0){
-    const latest = savedFinalLists[savedFinalLists.length-1];
+    const latest = savedFinalLists[0];
     const banner = document.createElement('div');
     banner.className = 'final-save-banner';
     banner.innerHTML = `
@@ -3337,7 +3474,7 @@ function renderFinalList(){
   }
 
   // Build list of confirmed items with full metadata
-  const allConfirmed = confirmedIds.map(id => {
+  let allConfirmed = confirmedIds.map(id => {
     const item = ITEM_MAP[id] || meta[id] || { id, name: id, subcat:'', store:'Supermarket', note:'' };
     return { ...item, qty: finalListCache[id], note: (state[id]||{}).note || item.note || '' };
   });
@@ -3358,10 +3495,39 @@ function renderFinalList(){
 
   // ── SHOP MODE ──
 
-  // Determine dominant store for route lookup
+  // v39: STORE SEGMENTS — a supermarket run and a wet market run are different
+  // trips, so they get their own list, own route, own bought count. Replaces the
+  // old "dominant store" guess that mixed every store into one flat list.
   const storeCounts = {};
   allConfirmed.forEach(i => { const s = i.store||'Supermarket'; storeCounts[s] = (storeCounts[s]||0)+1; });
-  const dominantStore = Object.entries(storeCounts).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'Supermarket';
+  const storesPresent = Object.keys(storeCounts)
+    .sort((a,b) => storeCounts[b]-storeCounts[a] || a.localeCompare(b));
+
+  if(!finalListStore || !storeCounts[finalListStore]){
+    const remembered = localStorage.getItem(KEY_FINAL_STORE);
+    finalListStore = (remembered && storeCounts[remembered]) ? remembered : storesPresent[0];
+  }
+  localStorage.setItem(KEY_FINAL_STORE, finalListStore);
+
+  if(storesPresent.length > 1){
+    const segBar = document.createElement('div');
+    segBar.className = 'final-store-seg';
+    segBar.innerHTML = storesPresent.map(st => {
+      const sm = _storeMeta(st);
+      const done = allConfirmed.filter(i => (i.store||'Supermarket')===st && finalListBoughtState[i.id]).length;
+      const isActive = st === finalListStore;
+      return `<button class="fss-btn${isActive?' active':''}" onclick="setFinalStore('${st.replace(/'/g,"\\'")}')"
+                style="${isActive?`background:${sm.bg};border-color:${sm.border};color:${sm.fg};`:''}">
+                <span class="fss-icon">${sm.icon}</span>
+                <span class="fss-label">${st}</span>
+                <span class="fss-count">${done}/${storeCounts[st]}</span>
+              </button>`;
+    }).join('');
+    scroll.appendChild(segBar);
+  }
+
+  const dominantStore = finalListStore;
+  allConfirmed = allConfirmed.filter(i => (i.store||'Supermarket') === dominantStore);
 
   const hasRoute = !!_getRoute(dominantStore);
 
@@ -3703,11 +3869,14 @@ async function saveFinalListToSheet(){
 
   const meta = window._finalItemMeta || {};
   const now = new Date();
-  const label = now.toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-  const listId = 'FL_' + now.toISOString().replace(/[:.]/g,'').substring(0,15);
+  const stamp = now.toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
   const user = localStorage.getItem(KEY_USER) || 'Helper';
+  const sweepId = _activeScopeId();
+  const sweepLabel = currentSweepMeta
+    ? `${currentSweepMeta.date} ${currentSweepMeta.time}`
+    : stamp;
 
-  const items = confirmed.map(id => {
+  const allItems = confirmed.map(id => {
     const item = ITEM_MAP[id] || meta[id] || {};
     return {
       itemId:  id,
@@ -3719,11 +3888,30 @@ async function saveFinalListToSheet(){
     };
   });
 
+  // v39: one saved list per store. A supermarket run and a wet market run from
+  // the same sweep are separate trips, so they are separate lists.
+  const byStore = {};
+  allItems.forEach(i => {
+    const st = i.store || 'Supermarket';
+    (byStore[st] = byStore[st] || []).push(i);
+  });
+
+  const batch = Object.entries(byStore).map(([store, items]) => ({
+    listId:  `FL_${now.toISOString().replace(/[:.]/g,'').substring(0,15)}_${store.replace(/\s+/g,'')}`,
+    label:   `${_storeMeta(store).icon} ${store} · ${stamp}`,
+    store,
+    sweepId,
+    sweepLabel,
+    created:   stamp,
+    createdAt: now.toISOString(),
+    createdBy: user,
+    itemCount: items.length,
+    items,
+  }));
+
   // Save locally first
-  const localLists = _getSavedFinalLists();
-  localLists.push({ listId, label, created: label, itemCount: items.length, items });
-  localStorage.setItem(KEY_FINAL_LIST, JSON.stringify(localLists.slice(-10))); // keep last 10
-  localStorage.setItem(KEY_FINAL_LIST_ID, listId);
+  _saveFinalListsCache([...batch, ..._getSavedFinalLists()]);
+  localStorage.setItem(KEY_FINAL_LIST_ID, batch[0].listId);
 
   // v28: Associate this final list with the current/last sweep so banner clears
   const localDone = localStorage.getItem(KEY_SWEEP_DONE);
@@ -3737,16 +3925,21 @@ async function saveFinalListToSheet(){
     } catch(e) {}
   }
 
-  showToast('Saving to Sheet…');
+  showToast(batch.length > 1 ? `Saving ${batch.length} lists…` : 'Saving to Sheet…');
 
   try {
-    await androidSafePost(url, {
-      action: 'savefinallist',
-      listId, label, createdBy: user,
-      createdAt: now.toISOString(),
-      items
-    });
-    showToast('✓ Final list saved!');
+    for(const fl of batch){
+      await androidSafePost(url, {
+        action: 'savefinallist',
+        listId: fl.listId, label: fl.label,
+        createdBy: user, createdAt: fl.createdAt,
+        sweepId: fl.sweepId, store: fl.store,
+        items: fl.items
+      });
+    }
+    showToast(batch.length > 1
+      ? `✓ ${batch.length} lists saved (${Object.keys(byStore).join(', ')})`
+      : '✓ Final list saved!');
   } catch(e) {
     console.warn('saveFinalList sheet sync failed:', e);
     showToast('Saved locally (sheet sync failed)');
@@ -3754,9 +3947,13 @@ async function saveFinalListToSheet(){
   renderFinalList(); // refresh to show updated save banner
 }
 
+// v39: always returns newest-first, regardless of which code path wrote the cache.
 function _getSavedFinalLists(){
-  try { return JSON.parse(localStorage.getItem(KEY_FINAL_LIST)||'[]'); }
+  try { return _normaliseFinalLists(JSON.parse(localStorage.getItem(KEY_FINAL_LIST)||'[]')); }
   catch(e){ return []; }
+}
+function _saveFinalListsCache(lists){
+  localStorage.setItem(KEY_FINAL_LIST, JSON.stringify(_normaliseFinalLists(lists).slice(0, 20)));
 }
 
 async function openFinalListPicker(){
@@ -3772,12 +3969,12 @@ async function openFinalListPicker(){
       const json = await androidSafeGet(`${url}?action=getfinallists`);
       if (json.lists && json.lists.length > 0) {
         // Sheet is authoritative — normalise field names (Sheet uses itemId, local may use id)
-        lists = json.lists.map(fl => ({
+        lists = _normaliseFinalLists(json.lists.map(fl => ({
           ...fl,
           items: (fl.items || []).map(i => ({...i, itemId: i.itemId || i.id})),
-        }));
+        })));
         // Update local cache
-        localStorage.setItem(KEY_FINAL_LIST, JSON.stringify(lists.slice(-10)));
+        _saveFinalListsCache(lists);
       }
     } catch(e) {
       console.warn('openFinalListPicker: sheet fetch failed, using local cache', e);
@@ -3786,13 +3983,40 @@ async function openFinalListPicker(){
 
   container.innerHTML = '';
   if (!lists.length) {
-    container.innerHTML = '<p style="text-align:center;color:var(--mid);padding:16px;">No saved lists yet.</p>';
-  } else {
-    [...lists].reverse().forEach(fl => {
+    container.innerHTML = '<p style="text-align:center;color:var(--mid);padding:16px;">No saved lists yet. Confirm items on the Pre-Shopping tab, then save from the Final List tab.</p>';
+    return;
+  }
+
+  // v39: group by sweep so two sweeps on the same day are visually separate,
+  // and each store's list within a sweep is picked independently.
+  const groups = [];
+  const groupMap = {};
+  lists.forEach(fl => {
+    const gid = fl.sweepId || fl.created || fl.label || fl.listId;
+    if(!groupMap[gid]){ groupMap[gid] = { gid, label: fl.sweepLabel || fl.created || fl.label, lists: [] }; groups.push(groupMap[gid]); }
+    groupMap[gid].lists.push(fl);
+  });
+
+  groups.forEach((g, gi) => {
+    const hdr = document.createElement('div');
+    hdr.style.cssText = 'display:flex;align-items:baseline;gap:8px;padding:'+(gi?'18px':'4px')+' 4px 8px;';
+    hdr.innerHTML = `
+      <span style="font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--violet-dark);">Sweep</span>
+      <span style="font-size:12px;font-weight:700;color:var(--charcoal-mid);">${g.label || '—'}</span>`;
+    container.appendChild(hdr);
+
+    g.lists.forEach(fl => {
+      const sm = _storeMeta(fl.store);
       const opt = document.createElement('div');
       opt.className = 'final-list-picker-opt';
-      opt.innerHTML = `<div class="flp-title">${fl.label}</div><div class="flp-meta">${fl.itemCount} items · ${fl.created || fl.createdAt || ''}</div>`;
+      opt.innerHTML = `
+        <div class="flp-title">
+          <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;background:${sm.bg};color:${sm.fg};border:1.5px solid ${sm.border};padding:2px 8px;border-radius:6px;margin-right:6px;">${sm.icon} ${fl.store || 'Mixed'}</span>
+          ${fl.itemCount} item${fl.itemCount!==1?'s':''}
+        </div>
+        <div class="flp-meta">${fl.created || fl.createdAt || ''}${fl.createdBy?' · by '+fl.createdBy:''}</div>`;
       opt.onclick = () => {
+        _resetFinalListForSweep(fl.sweepId || fl.listId);
         finalListCache = {};
         finalListBoughtState = {}; _saveBoughtState({});
         window._finalItemMeta = {};
@@ -3801,13 +4025,14 @@ async function openFinalListPicker(){
           finalListCache[key] = i.qty;
           window._finalItemMeta[key] = i;
         });
+        finalListStore = fl.store || null;
         closeFinalListPicker();
         renderFinalList();
-        showToast('Final list loaded');
+        showToast(`${fl.store || 'Final'} list loaded`);
       };
       container.appendChild(opt);
     });
-  }
+  });
 }
 
 function closeFinalListPicker(){
@@ -3815,14 +4040,22 @@ function closeFinalListPicker(){
 }
 
 function shareFinalList(){
-  const confirmed = Object.keys(finalListCache);
-  if(!confirmed.length){ showToast('Nothing to share!'); return; }
   const meta = window._finalItemMeta || {};
+  // v39: share the trip you're looking at, not every store mashed together
+  const confirmed = Object.keys(finalListCache).filter(id => {
+    if(!finalListStore) return true;
+    const item = ITEM_MAP[id] || meta[id] || {};
+    return (item.store || 'Supermarket') === finalListStore;
+  });
+  if(!confirmed.length){ showToast('Nothing to share!'); return; }
   const items = confirmed.map(id => {
     const item = ITEM_MAP[id] || meta[id] || { name: id, subcat:'' };
     return `  • ${item.name}  ×${finalListCache[id]}`;
   });
-  const text = `🛒 Final Shopping List — ${new Date().toLocaleDateString('en-AU')}\n\n${items.join('\n')}`;
+  const sm = _storeMeta(finalListStore);
+  const heading = finalListStore ? `${sm.icon} ${finalListStore} List` : '🛒 Final Shopping List';
+  const when = currentSweepMeta ? `${currentSweepMeta.date} ${currentSweepMeta.time}` : new Date().toLocaleDateString('en-AU');
+  const text = `${heading} — ${when}\n\n${items.join('\n')}`;
   if(navigator.share) navigator.share({title:'Final Shopping List', text});
   else if(navigator.clipboard) navigator.clipboard.writeText(text).then(()=>showToast('Copied!'));
   else showToast('Use Chrome Share for this feature');
@@ -3940,11 +4173,12 @@ async function addItemToChecklist(item) {
   // Set qty to 0 — appears on Pre-Shopping Checklist as "out of stock, needs buying"
   if (!state[item.id]) state[item.id] = { qty: null, note: '' };
   state[item.id].qty = 0;
-  state[item.id].forceBuy = false;
+  // v39: adding an item here IS a push-to-buy — tag it so it reads 🛒 REQUESTED
+  state[item.id].forceBuy = true;
   saveState();
 
   closeAddItemModal();
-  showToast(`✓ ${item.name} added to checklist`);
+  showToast(`🛒 ${item.name} added and requested`);
 
   // Re-render the checklist so item appears immediately
   if (!finalListView) renderShoppingList();
