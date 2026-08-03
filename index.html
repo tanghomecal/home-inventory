@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v40</title>
+<title>Home Inventory v41</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -125,9 +125,8 @@
   .fss-count{font-family:var(--mono);font-size:12px;font-weight:800;opacity:0.75;}
   /* v39: Push to buy — pre-shopping checklist row */
   .psc-push-row{margin-top:8px;}
-  .psc-push-btn{border:2px solid var(--sky-mid);border-radius:10px;background:var(--sky-light);color:var(--sky-dark);font-family:var(--font);font-size:12px;font-weight:800;padding:8px 14px;cursor:pointer;transition:all 0.15s;}
-  .psc-push-btn:active{background:var(--sky-mid);}
-  .psc-push-btn.on-list{background:var(--teal-light);border-color:var(--teal-mid);color:var(--teal-dark);}
+  .psc-remove-btn{border:2px solid var(--blush-mid);border-radius:10px;background:var(--blush);color:var(--mid);font-family:var(--font);font-size:12px;font-weight:800;padding:7px 13px;cursor:pointer;transition:all 0.15s;}
+  .psc-remove-btn:active{background:var(--terra-light);color:var(--charcoal);}
   /* Push to buy */
   .push-buy-btn{width:100%;border:2px solid var(--sky-mid);border-radius:10px;background:var(--sky-light);color:var(--sky-dark);font-family:var(--font);font-size:12px;font-weight:700;padding:9px 4px;cursor:pointer;text-align:center;transition:all 0.15s;box-sizing:border-box;}
   .push-buy-btn:active{background:var(--sky-mid);}
@@ -2472,8 +2471,10 @@ function buildItemCard(item){
   return card;
 }
 
-// v39: Push to Buy now lives on the Pre-Shopping Checklist only.
-// It flags an item as shopper-requested (🛒 REQUESTED) regardless of stock level.
+// v41: Push to Buy is no longer rendered anywhere — on the Pre-Shopping Checklist
+// it duplicated "Add to Final List", and it had already been removed from the sweep
+// item card in v39. forceBuy is now set solely by addItemToChecklist(). Kept as an
+// internal helper so anything still calling it behaves sanely.
 function pushToBuy(itemId, e) {
   if(e) e.stopPropagation();
   if(!state[itemId]) state[itemId]={qty:null,note:''};
@@ -2489,9 +2490,6 @@ function pushToBuy(itemId, e) {
   // Pre-Shopping Checklist context — re-render the checklist and sync
   const shopRow = document.getElementById('shoprow-'+itemId);
   if(shopRow){
-    showToast(state[itemId].forceBuy
-      ? `🛒 ${item.name} requested`
-      : `Request removed from ${item.name}`);
     renderShoppingList();
     syncPrelimToSheet();
     return;
@@ -2502,6 +2500,31 @@ function pushToBuy(itemId, e) {
   if(oldCard) oldCard.replaceWith(buildItemCard(item));
   updateRoomProgressFromState();
   updateDoneButton();
+}
+
+// v41: undo for the + Add Item button. Only offered on non-mandatory items that are
+// on the checklist purely because they were requested — a mandatory item is there on
+// its own merit and can't be removed this way. Also drops it from the final list, so
+// removing it here doesn't leave an orphan the shopper still sees.
+function removeFromChecklist(itemId, e) {
+  if(e) e.stopPropagation();
+  const item = ITEM_MAP[itemId];
+  const name = item ? item.name : itemId;
+  if(!state[itemId] || !state[itemId].forceBuy) return;
+
+  state[itemId].forceBuy = false;
+  state[itemId].qty = null;   // back to "not counted" rather than "counted as zero"
+  saveState();
+
+  if(finalListCache[itemId] !== undefined){
+    delete finalListCache[itemId];
+    delete finalListBoughtState[itemId];
+    _saveBoughtState(finalListBoughtState);
+  }
+
+  showToast(`${name} removed from checklist`);
+  renderShoppingList();
+  syncPrelimToSheet();
 }
 
 function uncheckItem(itemId, e) {
@@ -3069,10 +3092,13 @@ function renderShoppingList(){
           : isForcedBuy
           ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;background:var(--sky-light);color:var(--sky-dark);border:1.5px solid #AABFEE;padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">🛒 REQUESTED</span>`
           : `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;background:var(--blush);color:var(--mid);border:1.5px solid var(--blush-mid);padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">REPORTED</span>`;
-        // v39: Push to Buy toggle — moved here from the sweep item card
-        const pushBuyHtml = isForcedBuy
-          ? `<button class="psc-push-btn on-list" onclick="pushToBuy('${item.id}',event)">🛒 Requested</button>`
-          : `<button class="psc-push-btn" onclick="pushToBuy('${item.id}',event)">🛒 Push to buy</button>`;
+        // v41: Push to Buy removed from the checklist — "Add to Final List" already
+        // does the same job. forceBuy now only comes from the + Add Item button, so
+        // the one thing still needed here is a way to undo a mis-tapped addition.
+        const isChecklistOnlyByRequest = !item.must && isForcedBuy;
+        const removeHtml = isChecklistOnlyByRequest
+          ? `<button class="psc-remove-btn" onclick="removeFromChecklist('${item.id}',event)">✕ Remove from checklist</button>`
+          : '';
 
         row.innerHTML=`
           <div style="flex:1;min-width:0;">
@@ -3106,7 +3132,7 @@ function renderShoppingList(){
                 ${isAlreadyConfirmed?'On Final List':'Add to Final List'}
               </button>
             </div>
-            <div class="psc-push-row">${pushBuyHtml}</div>
+            ${removeHtml?`<div class="psc-push-row">${removeHtml}</div>`:''}
             ${note?`<span class="shop-note-text" style="margin-top:8px;">📝 ${note}</span>`:''}
           </div>`;
         scBody.appendChild(row);
