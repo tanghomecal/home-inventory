@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v39</title>
+<title>Home Inventory v40</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -2663,7 +2663,9 @@ function openSweepPicker(sweeps, url){
       // v39 FIX: a different sweep means a different final list. Without this the
       // previous sweep's confirmed items and ticks carried over — the "old shopping
       // list keeps showing up" bug, worst when two sweeps run on the same day.
-      const switched = _resetFinalListForSweep(sw.sweepId);
+      // v40: anchored to the sweep — re-picking the sweep you are already
+      // building/shopping resumes that trip instead of blanking the list.
+      const switched = _resetFinalListForSweep(sw.sweepId, { sweepAnchor: sw.sweepId });
       currentSweepMeta = sw;
       if(switched) switchShopTab('prechecklist');
       _fetchStockAndRender(url);
@@ -2728,7 +2730,9 @@ function _openRegenPicker(sweeps, url){
       if(titleEl) titleEl.textContent = 'Which sweep to view?';
       if(subEl)   subEl.textContent   = 'Choose a sweep to load the pre-shopping checklist';
       // Clear current final list — the user is starting fresh from this sweep
-      _resetFinalListForSweep(sw.sweepId);
+      // v40: a regenerate is always a brand-new trip, even from the same sweep,
+      // so it must never inherit the previous list's ticked-off items.
+      _resetFinalListForSweep('REGEN_' + Date.now(), { sweepAnchor: sw.sweepId, force: true });
       finalListCache = {}; finalListBoughtState = {}; _saveBoughtState({});
       window._finalItemMeta = {};
       currentSweepMeta = sw;
@@ -3175,6 +3179,12 @@ function confirmToFinalList(itemId, itemName, subcat, store){
   } else {
     // Store full item info for final list rendering
     finalListCache[itemId] = qty;
+    // v40: an item you have just added has not been bought yet — clear any tick
+    // left over from an earlier list before it reaches the Final List tab.
+    if(finalListBoughtState[itemId]){
+      delete finalListBoughtState[itemId];
+      _saveBoughtState(finalListBoughtState);
+    }
     // Save extended info in a parallel structure
     if(!window._finalItemMeta) window._finalItemMeta = {};
     window._finalItemMeta[itemId] = { id:itemId, name:itemName, subcat, store, note };
@@ -3233,10 +3243,33 @@ const KEY_BOUGHT_STATE = 'inv_boughtState';
 let finalListStore = null;  // v39: active store segment on the Final List tab
 // KEY_ROUTE_PREFIX removed in v36 — routes now cached under KEY_ROUTES per store
 
-// ── v39: SWEEP SCOPING ───────────────────────────────────────────────────────
-// Everything on the Final List tab belongs to exactly one sweep. Two sweeps run
-// on the same day are two different scopes and never share ticked-off items.
+// ── v40: TRIP SCOPING (replaces v39 sweep scoping) ───────────────────────────
+// A "trip" is one saved final list, not one sweep. Two lists built from the same
+// sweep — a regenerate, a re-save after adding items, or a second store run —
+// are separate trips and must never inherit each other's ticked-off items.
+//
+// v39 BUG: ticks were bucketed by _activeScopeId(), which read currentSweepMeta
+// / KEY_SWEEP_DONE / 'local'. But _resetFinalListForSweep() wrote the loaded
+// list's id into KEY_ACTIVE_SWEEP_ID, and _activeScopeId() never looked at that
+// key. Reader and writer pointed at two different buckets, so "clear the ticks"
+// often cleared a bucket nobody was reading — and the previous trip's ticks were
+// still on screen when a new final list was loaded. Worse, because the scope was
+// the sweepId, a second list built from the same sweep hit the early-return in
+// _resetFinalListForSweep() and kept every tick.
+//
+// v40: KEY_ACTIVE_SWEEP_ID is now the single source of truth for the tick bucket,
+// and it holds a trip key derived from the saved list, not the sweep.
+const KEY_ACTIVE_TRIP_SWEEP = 'inv_activeTripSweepId'; // sweep the active trip came from
+
 function _activeScopeId(){
+  const active = localStorage.getItem(KEY_ACTIVE_SWEEP_ID);
+  if(active) return active;
+  return _currentSweepId();
+}
+
+// The sweep the app is working against. Kept separate from the tick bucket so
+// saved lists still record a real sweepId for grouping in the picker.
+function _currentSweepId(){
   if(currentSweepMeta && currentSweepMeta.sweepId) return currentSweepMeta.sweepId;
   try {
     const done = JSON.parse(localStorage.getItem(KEY_SWEEP_DONE)||'{}');
@@ -3245,27 +3278,91 @@ function _activeScopeId(){
   return 'local';
 }
 
-// Clears the in-memory final list when the user moves to a different sweep.
-// This is the fix for old lists bleeding into a new sweep's Final List tab.
-function _resetFinalListForSweep(sweepId){
-  const scope = sweepId || 'local';
-  if(localStorage.getItem(KEY_ACTIVE_SWEEP_ID) === scope) return false;
+// Trip key for a saved list. listIds look like FL_<stamp>_<Store>; stripping the
+// store suffix means a supermarket run and a wet market run saved together share
+// one trip, while a later re-save (new stamp) is a genuinely new trip.
+function _tripKeyForList(fl){
+  if(!fl) return 'local';
+  if(fl.listId){
+    const st = (fl.store||'').replace(/\s+/g,'');
+    let key = String(fl.listId);
+    if(st && key.endsWith('_'+st)) key = key.slice(0, -(st.length+1));
+    return key;
+  }
+  return fl.sweepId || fl.label || 'local';
+}
+
+// Point the Final List tab at a different scope.
+//   same scope        → resuming the same trip, ticks are kept
+//   new scope         → fresh trip, ticks start empty
+//   opts.sweepAnchor  → don't reset if we're already on a trip from this sweep
+//   opts.force        → always reset unless it is literally the same trip
+function _resetFinalListForSweep(scopeId, opts){
+  opts = opts || {};
+  const scope  = scopeId || 'local';
+  const anchor = opts.sweepAnchor || null;
+  const prev   = localStorage.getItem(KEY_ACTIVE_SWEEP_ID);
+
+  if(prev === scope){                       // same trip — resume, keep ticks
+    finalListBoughtState = _loadBoughtState();
+    return false;
+  }
+  if(!opts.force && anchor && localStorage.getItem(KEY_ACTIVE_TRIP_SWEEP) === anchor){
+    finalListBoughtState = _loadBoughtState();  // still the same sweep's trip
+    return false;
+  }
+
   finalListCache = {};
   window._finalItemMeta = {};
-  finalListBoughtState = {};
   finalListStore = null;
   finalListCustomOrder = null;
   localStorage.setItem(KEY_ACTIVE_SWEEP_ID, scope);
+  localStorage.setItem(KEY_ACTIVE_TRIP_SWEEP, anchor || scope);
+  finalListBoughtState = _loadBoughtState();  // ticks belonging to the NEW scope
+  _saveBoughtState(finalListBoughtState);
   return true;
 }
 
-// Bought state is stored as {scopeId: {itemId: true}} so each sweep keeps its own ticks.
+// v40: after saving, move the in-progress trip onto the new list's trip key.
+// The current shop keeps its ticks; the next save (new key) reads as a new trip.
+function _rescopeBoughtState(newScopeId, sweepAnchor){
+  const scope = newScopeId || 'local';
+  const prev  = _activeScopeId();
+  localStorage.setItem(KEY_ACTIVE_TRIP_SWEEP, sweepAnchor || scope);
+  if(prev === scope) return;
+  const current = {...finalListBoughtState};
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem(KEY_BOUGHT_STATE)||'{}'); } catch(e){}
+  if(_isLegacyFlatBucket(all)) all = {};
+  delete all[prev];
+  all[scope] = current;
+  localStorage.setItem(KEY_BOUGHT_STATE, JSON.stringify(all));
+  localStorage.setItem(KEY_ACTIVE_SWEEP_ID, scope);
+  finalListBoughtState = current;
+}
+
+// v40: an item that isn't on the list can't be ticked. Stops a stale tick riding
+// along when an item is removed and later reappears on a newly built list.
+function _pruneBoughtState(){
+  let changed = false;
+  Object.keys(finalListBoughtState).forEach(id => {
+    if(finalListCache[id] === undefined){ delete finalListBoughtState[id]; changed = true; }
+  });
+  if(changed) _saveBoughtState(finalListBoughtState);
+}
+
+// Pre-v39 shape was a flat {itemId:true} map rather than {scopeId:{itemId:true}}.
+function _isLegacyFlatBucket(obj){
+  const keys = Object.keys(obj||{});
+  return keys.length > 0 && keys.every(k => obj[k] === true);
+}
+
+// Bought state is stored as {scopeId: {itemId: true}} so each trip keeps its own ticks.
 function _loadBoughtState(){
   try {
     const all = JSON.parse(localStorage.getItem(KEY_BOUGHT_STATE)||'{}');
     const scoped = all[_activeScopeId()];
-    // Migrate the old flat {itemId:true} shape on first read
-    if(!scoped && Object.values(all).every(v => v === true)) return {...all};
+    if(!scoped && _isLegacyFlatBucket(all)) return {...all};  // one-time migration
     return scoped || {};
   } catch(e){ return {}; }
 }
@@ -3273,10 +3370,27 @@ function _saveBoughtState(s){
   let all = {};
   try {
     const raw = JSON.parse(localStorage.getItem(KEY_BOUGHT_STATE)||'{}');
-    if(!Object.values(raw).every(v => v === true)) all = raw;
+    if(!_isLegacyFlatBucket(raw)) all = raw;
   } catch(e){}
-  all[_activeScopeId()] = s;
+  const scope = _activeScopeId();
+  all[scope] = s;
+  // Keep only the 10 most recent trips so this key can't grow without bound
+  const scopes = Object.keys(all);
+  if(scopes.length > 10){
+    scopes.slice(0, scopes.length - 10).forEach(k => { if(k !== scope) delete all[k]; });
+  }
   localStorage.setItem(KEY_BOUGHT_STATE, JSON.stringify(all));
+}
+
+// v40: user-facing escape hatch — clear every tick on the list currently shown.
+function resetBoughtTicks(){
+  const ticked = Object.keys(finalListBoughtState).length;
+  if(!ticked){ showToast('Nothing ticked off yet'); return; }
+  if(!confirm(`Clear ${ticked} ticked-off item${ticked!==1?'s':''} and start this list fresh?`)) return;
+  finalListBoughtState = {};
+  _saveBoughtState({});
+  renderFinalList();
+  showToast('✓ All ticks cleared');
 }
 
 // v39: canonical ordering — newest first, whatever the source.
@@ -3410,6 +3524,7 @@ function setFinalMode(mode){
 
 function renderFinalList(){
   finalListBoughtState = _loadBoughtState();
+  _pruneBoughtState(); // v40: drop ticks for items no longer on this list
   const scroll = document.getElementById('shop-scroll');
   scroll.innerHTML = '';
   const subEl = document.getElementById('shop-sub-text');
@@ -3638,11 +3753,19 @@ function _appendFinalItemRow(container, item, isReorder, isNewInRoute){
 
 function _appendFinalActions(container){
   const actionsWrap = document.createElement('div');
-  actionsWrap.style.cssText = 'display:flex;gap:10px;margin:16px 0 80px;';
+  actionsWrap.style.cssText = 'display:flex;gap:10px;margin:16px 0 10px;';
   actionsWrap.innerHTML = `
     <button onclick="saveFinalListToSheet()" style="flex:1;padding:16px;border:none;border-radius:var(--radius);background:var(--charcoal);color:white;font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer;">💾 Save List</button>
     <button onclick="shareFinalList()" style="flex:1;padding:16px;border:none;border-radius:var(--radius);background:var(--violet);color:white;font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer;">Share 📤</button>`;
   container.appendChild(actionsWrap);
+
+  // v40: manual escape hatch if ticks ever survive somewhere they shouldn't
+  const ticked = Object.keys(finalListBoughtState).filter(id => finalListCache[id] !== undefined).length;
+  const resetWrap = document.createElement('div');
+  resetWrap.style.cssText = 'margin:0 0 80px;';
+  resetWrap.innerHTML = `
+    <button onclick="resetBoughtTicks()" style="width:100%;padding:12px;border:2px solid var(--blush-mid);border-radius:var(--radius);background:var(--blush);color:var(--charcoal-mid);font-family:var(--font);font-size:13px;font-weight:800;cursor:pointer;">↺ Reset ticked-off items${ticked?` (${ticked})`:''}</button>`;
+  container.appendChild(resetWrap);
 }
 
 // ── v35: REORDER MODE RENDERER ────────────────────────────────────────────────
@@ -3871,7 +3994,8 @@ async function saveFinalListToSheet(){
   const now = new Date();
   const stamp = now.toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
   const user = localStorage.getItem(KEY_USER) || 'Helper';
-  const sweepId = _activeScopeId();
+  // v40: the saved list records the real sweep, not the tick bucket.
+  const sweepId = _currentSweepId();
   const sweepLabel = currentSweepMeta
     ? `${currentSweepMeta.date} ${currentSweepMeta.time}`
     : stamp;
@@ -3912,6 +4036,11 @@ async function saveFinalListToSheet(){
   // Save locally first
   _saveFinalListsCache([...batch, ..._getSavedFinalLists()]);
   localStorage.setItem(KEY_FINAL_LIST_ID, batch[0].listId);
+
+  // v40: this save defines a new trip. Carry the ticks you have made so far onto
+  // it (saving mid-shop shouldn't lose your progress), which also means the NEXT
+  // save gets a different trip key and therefore starts with a clean slate.
+  _rescopeBoughtState(_tripKeyForList(batch[0]), sweepId);
 
   // v28: Associate this final list with the current/last sweep so banner clears
   const localDone = localStorage.getItem(KEY_SWEEP_DONE);
@@ -4016,9 +4145,12 @@ async function openFinalListPicker(){
         </div>
         <div class="flp-meta">${fl.created || fl.createdAt || ''}${fl.createdBy?' · by '+fl.createdBy:''}</div>`;
       opt.onclick = () => {
-        _resetFinalListForSweep(fl.sweepId || fl.listId);
+        // v40: scope by the list's trip key, not its sweepId. Loading a newer
+        // list — including a re-save from the same sweep — is a new trip and
+        // starts with nothing ticked off. Re-loading the SAME list resumes it
+        // with your ticks intact.
+        _resetFinalListForSweep(_tripKeyForList(fl), { sweepAnchor: fl.sweepId || null, force: true });
         finalListCache = {};
-        finalListBoughtState = {}; _saveBoughtState({});
         window._finalItemMeta = {};
         (fl.items||[]).forEach(i => {
           const key = i.itemId || i.id;
