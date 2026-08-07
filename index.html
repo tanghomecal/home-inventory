@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v41</title>
+<title>Home Inventory v42</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -1102,6 +1102,15 @@ function androidSafeGet(url) {
   });
 }
 
+// v42: the Apps Script never returns a non-200 status — doGet/doPost catch every
+// error and return jsonOut({error: "..."}). So a resolved promise means "the
+// server replied", NOT "the operation worked". Every caller that cares must check.
+function _assertSheetOk(json, what){
+  if (!json || typeof json !== 'object') throw new Error(`Empty response while ${what}`);
+  if (json.error) throw new Error(`Sheet rejected the request while ${what}: ${json.error}`);
+  return json;
+}
+
 function androidSafePost(url, payload) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -1395,6 +1404,7 @@ function dismissSweepDoneBanner() {
 async function fetchLatestFinalListFromSheet(url) {
   try {
     const json = await androidSafeGet(`${url}?action=getfinallists`);
+    _assertSheetOk(json, 'loading saved final lists');   // v42
     const lists = json.lists || [];
     if (!lists.length) return;
 
@@ -3287,6 +3297,16 @@ let finalListStore = null;  // v39: active store segment on the Final List tab
 // and it holds a trip key derived from the saved list, not the sweep.
 const KEY_ACTIVE_TRIP_SWEEP = 'inv_activeTripSweepId'; // sweep the active trip came from
 
+// v42: every write in this path is guarded. These helpers run inside the Final
+// List picker's onclick, BEFORE finalListCache is populated — so an unguarded
+// throw here (quota exceeded, private-mode storage, tablet WebView weirdness)
+// aborts the handler and the tapped list silently never loads. That looks to the
+// user exactly like "I can't retrieve my lists".
+function _safeSet(key, value){
+  try { localStorage.setItem(key, value); return true; }
+  catch(e){ console.warn('localStorage write failed for', key, e); return false; }
+}
+
 function _activeScopeId(){
   const active = localStorage.getItem(KEY_ACTIVE_SWEEP_ID);
   if(active) return active;
@@ -3342,10 +3362,11 @@ function _resetFinalListForSweep(scopeId, opts){
   window._finalItemMeta = {};
   finalListStore = null;
   finalListCustomOrder = null;
-  localStorage.setItem(KEY_ACTIVE_SWEEP_ID, scope);
-  localStorage.setItem(KEY_ACTIVE_TRIP_SWEEP, anchor || scope);
+  _safeSet(KEY_ACTIVE_SWEEP_ID, scope);
+  _safeSet(KEY_ACTIVE_TRIP_SWEEP, anchor || scope);
   finalListBoughtState = _loadBoughtState();  // ticks belonging to the NEW scope
-  _saveBoughtState(finalListBoughtState);
+  // v42: no _saveBoughtState() here — switching trips is a read, and an extra
+  // write on the load path is exactly what could break loading.
   return true;
 }
 
@@ -3354,7 +3375,7 @@ function _resetFinalListForSweep(scopeId, opts){
 function _rescopeBoughtState(newScopeId, sweepAnchor){
   const scope = newScopeId || 'local';
   const prev  = _activeScopeId();
-  localStorage.setItem(KEY_ACTIVE_TRIP_SWEEP, sweepAnchor || scope);
+  _safeSet(KEY_ACTIVE_TRIP_SWEEP, sweepAnchor || scope);
   if(prev === scope) return;
   const current = {...finalListBoughtState};
   let all = {};
@@ -3362,8 +3383,8 @@ function _rescopeBoughtState(newScopeId, sweepAnchor){
   if(_isLegacyFlatBucket(all)) all = {};
   delete all[prev];
   all[scope] = current;
-  localStorage.setItem(KEY_BOUGHT_STATE, JSON.stringify(all));
-  localStorage.setItem(KEY_ACTIVE_SWEEP_ID, scope);
+  _safeSet(KEY_BOUGHT_STATE, JSON.stringify(all));
+  _safeSet(KEY_ACTIVE_SWEEP_ID, scope);
   finalListBoughtState = current;
 }
 
@@ -3405,7 +3426,7 @@ function _saveBoughtState(s){
   if(scopes.length > 10){
     scopes.slice(0, scopes.length - 10).forEach(k => { if(k !== scope) delete all[k]; });
   }
-  localStorage.setItem(KEY_BOUGHT_STATE, JSON.stringify(all));
+  _safeSet(KEY_BOUGHT_STATE, JSON.stringify(all));
 }
 
 // v40: user-facing escape hatch — clear every tick on the list currently shown.
@@ -3981,10 +4002,12 @@ function saveCurrentOrderAsRoute(store){
       name: routeName,
       savedBy: user,
       itemOrder: orderedIds,
-    }).then(() => {
+    }).then(res => {
+      _assertSheetOk(res, 'saving the route');            // v42
       showToast(`✓ "${routeName}" route saved!`);
-    }).catch(() => {
-      showToast(`✓ Route saved locally (sheet sync failed)`);
+    }).catch(err => {
+      console.warn('saveRoute failed:', err);
+      showToast(`⚠️ Route saved on this device only`);
     });
   } else {
     showToast(`✓ "${routeName}" route saved!`);
@@ -4046,8 +4069,14 @@ async function saveFinalListToSheet(){
     (byStore[st] = byStore[st] || []).push(i);
   });
 
+  const saveStamp = now.toISOString().replace(/[-:.]/g,'').substring(0,15)
+                  + '_' + Math.random().toString(36).slice(2,6);
+
   const batch = Object.entries(byStore).map(([store, items]) => ({
-    listId:  `FL_${now.toISOString().replace(/[:.]/g,'').substring(0,15)}_${store.replace(/\s+/g,'')}`,
+    // v42: was substring(0,15) — minute precision only, so two saves in the same
+    // minute produced identical listIds and therefore identical trip keys. Now
+    // second-precision plus a short random suffix.
+    listId:  `FL_${saveStamp}_${store.replace(/\s+/g,'')}`,
     label:   `${_storeMeta(store).icon} ${store} · ${stamp}`,
     store,
     sweepId,
@@ -4084,20 +4113,52 @@ async function saveFinalListToSheet(){
 
   try {
     for(const fl of batch){
-      await androidSafePost(url, {
+      const res = await androidSafePost(url, {
         action: 'savefinallist',
         listId: fl.listId, label: fl.label,
         createdBy: user, createdAt: fl.createdAt,
         sweepId: fl.sweepId, store: fl.store,
         items: fl.items
       });
+      // v42 CRITICAL FIX: the Apps Script answers HTTP 200 for everything and
+      // signals failure in the JSON body ({error:"..."}). androidSafePost resolves
+      // on any parseable JSON, so until now an unknown action, a script exception
+      // or a permissions failure all reported "✓ Final list saved!" while nothing
+      // reached the Sheet — and no other device could ever load the list.
+      _assertSheetOk(res, `saving ${fl.store} list`);
     }
-    showToast(batch.length > 1
-      ? `✓ ${batch.length} lists saved (${Object.keys(byStore).join(', ')})`
-      : '✓ Final list saved!');
+
+    // v42: read back and confirm the rows are actually queryable by another
+    // device, rather than trusting the write response alone.
+    let verified = false;
+    try {
+      const check = await androidSafeGet(`${url}?action=getfinallists`);
+      _assertSheetOk(check, 'verifying the save');
+      const onSheet = new Set((check.lists||[]).map(l => l.listId));
+      verified = batch.every(fl => onSheet.has(fl.listId));
+      if (check.lists) _saveFinalListsCache(_normaliseFinalLists(check.lists.map(fl => ({
+        ...fl, items: (fl.items||[]).map(i => ({...i, itemId: i.itemId || i.id})),
+      }))));
+    } catch(ve) {
+      console.warn('save verification failed:', ve);
+    }
+
+    if (verified) {
+      showToast(batch.length > 1
+        ? `✓ ${batch.length} lists on Sheet — other devices can load them`
+        : '✓ Saved to Sheet — other devices can load it');
+    } else {
+      showToast(batch.length > 1
+        ? `✓ ${batch.length} lists sent (couldn't verify)`
+        : '✓ Sent to Sheet (couldn\'t verify)');
+    }
   } catch(e) {
+    // v42: this used to read "Saved locally (sheet sync failed)", which is easy to
+    // take as success. It is not: the list exists on THIS device only, and no other
+    // device can load it until it reaches the Sheet.
     console.warn('saveFinalList sheet sync failed:', e);
-    showToast('Saved locally (sheet sync failed)');
+    alert('⚠️ Saved on this device only\n\nThe list did NOT reach Google Sheets, so other devices cannot load it yet.\n\n' + (e && e.message ? e.message : e) + '\n\nCheck the connection and tap Save List again.');
+    showToast('⚠️ NOT saved to Sheet — this device only');
   }
   renderFinalList(); // refresh to show updated save banner
 }
@@ -4118,10 +4179,12 @@ async function openFinalListPicker(){
   document.getElementById('final-list-picker-modal').classList.add('active');
 
   let lists = _getSavedFinalLists(); // local fallback
+  let fetchError = null;               // v42: track WHY we fell back
 
   if (url) {
     try {
       const json = await androidSafeGet(`${url}?action=getfinallists`);
+      if (json.error) throw new Error(json.error);
       if (json.lists && json.lists.length > 0) {
         // Sheet is authoritative — normalise field names (Sheet uses itemId, local may use id)
         lists = _normaliseFinalLists(json.lists.map(fl => ({
@@ -4133,12 +4196,37 @@ async function openFinalListPicker(){
       }
     } catch(e) {
       console.warn('openFinalListPicker: sheet fetch failed, using local cache', e);
+      fetchError = e && e.message ? e.message : String(e);
     }
+  } else {
+    fetchError = 'Not connected to Google Sheets';
   }
 
   container.innerHTML = '';
+
+  // v42: a failed fetch used to fall through to "No saved lists yet", which reads
+  // as "your lists are gone" when the real problem is that this device could not
+  // reach the Sheet. Say which it is.
+  if (fetchError) {
+    const warn = document.createElement('div');
+    warn.style.cssText = 'background:var(--terra-light);border:2px solid var(--terra-mid);border-radius:var(--radius);padding:12px;margin-bottom:12px;';
+    warn.innerHTML = `
+      <div style="font-size:13px;font-weight:800;color:var(--charcoal);margin-bottom:4px;">⚠️ Couldn't reach the Sheet</div>
+      <div style="font-size:12px;color:var(--charcoal-mid);line-height:1.5;">
+        ${lists.length ? 'Showing this device\'s cached lists — anything saved elsewhere since may be missing.' : 'No cached lists on this device either.'}
+      </div>
+      <div style="font-size:10px;font-family:var(--mono);color:var(--mid);margin-top:6px;word-break:break-all;">${String(fetchError).substring(0,140)}</div>
+      <button onclick="openFinalListPicker()" style="margin-top:10px;width:100%;padding:10px;border:none;border-radius:10px;background:var(--charcoal);color:white;font-family:var(--font);font-size:12px;font-weight:800;cursor:pointer;">↻ Retry</button>`;
+    container.appendChild(warn);
+  }
+
   if (!lists.length) {
-    container.innerHTML = '<p style="text-align:center;color:var(--mid);padding:16px;">No saved lists yet. Confirm items on the Pre-Shopping tab, then save from the Final List tab.</p>';
+    const empty = document.createElement('p');
+    empty.style.cssText = 'text-align:center;color:var(--mid);padding:16px;';
+    empty.textContent = fetchError
+      ? 'Nothing to show until the Sheet is reachable.'
+      : 'No saved lists yet. Confirm items on the Pre-Shopping tab, then save from the Final List tab.';
+    container.appendChild(empty);
     return;
   }
 
@@ -4175,7 +4263,15 @@ async function openFinalListPicker(){
         // list — including a re-save from the same sweep — is a new trip and
         // starts with nothing ticked off. Re-loading the SAME list resumes it
         // with your ticks intact.
-        _resetFinalListForSweep(_tripKeyForList(fl), { sweepAnchor: fl.sweepId || null, force: true });
+        // v42: scoping is bookkeeping; loading the list is the point. If the
+        // bookkeeping fails, load anyway rather than leaving the user staring at
+        // a picker that does nothing when tapped.
+        try {
+          _resetFinalListForSweep(_tripKeyForList(fl), { sweepAnchor: fl.sweepId || null, force: true });
+        } catch(err) {
+          console.warn('trip scoping failed, loading list anyway:', err);
+          finalListBoughtState = {};
+        }
         finalListCache = {};
         window._finalItemMeta = {};
         (fl.items||[]).forEach(i => {
@@ -4359,7 +4455,7 @@ async function addItemToChecklist(item) {
             : new Date().toISOString().slice(0,16).replace('T','_') + '_' + user.replace(/\s+/g,'');
         })(),
         scope: getSweepScope().join(', ') || 'All',
-      });
+      }).then(r => _assertSheetOk(r, 'syncing stock'));   // v42
       setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
     } catch(e) {
       setSyncBadge('pending', '⟳ Sync pending');
@@ -4398,14 +4494,17 @@ async function syncPrelimToSheet() {
   if (!sweepId) return; // can't save without a sweep anchor
 
   try {
-    await androidSafePost(url, {
+    const r = await androidSafePost(url, {
       action:  'saveprelimlist',
       sweepId,
       savedBy: localStorage.getItem(KEY_USER) || 'Helper',
       state,   // full in-memory state — other devices will merge this on top of snapshot
     });
+    _assertSheetOk(r, 'syncing the pre-shopping checklist');   // v42
+    setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
   } catch(e) {
     console.warn('syncPrelimToSheet failed:', e);
+    setSyncBadge('pending', '⟳ Sync pending');
   }
 }
 
@@ -4865,12 +4964,12 @@ async function submitAdhocToPrelim() {
   let savedOk = false;
   try {
     // 1. Save prelim state to Sheet (buying device will fetch this)
-    await androidSafePost(url, {
+    _assertSheetOk(await androidSafePost(url, {          // v42
       action:  'saveprelimlist',
       sweepId,
       savedBy: user,
       state:   prelimState,
-    });
+    }), 'saving the ad hoc list');
 
     // 2. Log to Sweep History so lastsweep returns it and other devices see the banner
     await androidSafePost(url, {
