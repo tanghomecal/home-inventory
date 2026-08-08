@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v46</title>
+<title>Home Inventory v47</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -275,7 +275,13 @@
   /* ── SWEEP PICKER MODAL (v15) ── */
   .sweep-picker-overlay{display:none;position:fixed;inset:0;background:rgba(45,45,45,0.55);z-index:998;align-items:flex-end;justify-content:center;}
   .sweep-picker-overlay.active{display:flex;}
-  .sweep-picker-sheet{background:var(--white);width:100%;max-width:480px;border-radius:24px 24px 0 0;padding:20px 20px 44px;animation:slideUp 0.25s ease;}
+  /* v47 CRITICAL FIX: the sheet had no height cap and no scrolling. The overlay is
+     position:fixed/inset:0 with align-items:flex-end, so once the content grew
+     taller than the screen the sheet ran off the TOP of the viewport with no way
+     to reach it. Options render newest-first, so the NEWEST lists were the ones
+     pushed out of sight — which reads as "my new lists aren't there", while the
+     oldest, sitting at the bottom, stayed perfectly tappable. */
+  .sweep-picker-sheet{background:var(--white);width:100%;max-width:480px;border-radius:24px 24px 0 0;padding:20px 20px 44px;animation:slideUp 0.25s ease;max-height:88vh;max-height:88dvh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
   .sweep-picker-handle{width:40px;height:4px;background:var(--blush-mid);border-radius:2px;margin:0 auto 18px;}
   .sweep-picker-title{font-size:18px;font-weight:800;color:var(--charcoal);margin-bottom:4px;}
   .sweep-picker-sub{font-size:13px;color:var(--charcoal-mid);margin-bottom:18px;font-weight:500;}
@@ -296,7 +302,7 @@
   /* ── NOTE MODAL ── */
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(45,45,45,0.5);z-index:999;align-items:flex-end;}
   .modal-overlay.active{display:flex;}
-  .modal-sheet{background:var(--white);width:100%;border-radius:24px 24px 0 0;padding:20px 20px 40px;animation:slideUp 0.25s ease;}
+  .modal-sheet{background:var(--white);width:100%;border-radius:24px 24px 0 0;padding:20px 20px 40px;animation:slideUp 0.25s ease;max-height:88vh;max-height:88dvh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}   /* v47 */
   @keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
   .modal-handle{width:40px;height:4px;background:var(--violet-mid);border-radius:2px;margin:0 auto 18px;}
   .modal-title{font-size:18px;font-weight:800;margin-bottom:14px;color:var(--charcoal);}
@@ -363,7 +369,7 @@
   /* ── STORE PICKER MODAL ── */
   .store-picker-overlay{display:none;position:fixed;inset:0;background:rgba(26,10,61,0.6);z-index:998;align-items:flex-end;}
   .store-picker-overlay.active{display:flex;}
-  .store-picker-sheet{background:var(--white);width:100%;border-radius:24px 24px 0 0;padding:22px 20px 44px;animation:slideUp 0.25s ease;}
+  .store-picker-sheet{background:var(--white);width:100%;border-radius:24px 24px 0 0;padding:22px 20px 44px;animation:slideUp 0.25s ease;max-height:88vh;max-height:88dvh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}   /* v47 */
   .store-picker-title{font-size:20px;font-weight:800;color:var(--charcoal);margin-bottom:4px;}
   .store-picker-sub{font-size:13px;color:var(--mid);margin-bottom:18px;font-weight:500;}
   .store-option{display:flex;align-items:center;gap:14px;padding:14px 16px;border:2px solid var(--violet-mid);border-radius:var(--radius-sm);margin-bottom:10px;cursor:pointer;transition:all 0.15s;user-select:none;}
@@ -4278,6 +4284,15 @@ async function openFinalListPicker(){
   const localOnly = lists.filter(fl => !fl._onSheet && !fetchError).length;
 
   container.innerHTML = '';
+
+  // v47: state the count up front. If the sheet is ever clipped again, a visible
+  // "13 saved lists" against 3 on screen makes it obvious something is wrong.
+  if (lists.length > 3) {
+    const count = document.createElement('div');
+    count.style.cssText = 'font-size:12px;font-weight:700;color:var(--mid);padding:0 4px 10px;';
+    count.textContent = `${lists.length} saved lists — scroll for more`;
+    container.appendChild(count);
+  }
 
   // v42: a failed fetch used to fall through to "No saved lists yet", which reads
   // as "your lists are gone" when the real problem is that this device could not
