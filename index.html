@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v43</title>
+<title>Home Inventory v44</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -4228,22 +4228,26 @@ async function openFinalListPicker(){
   container.innerHTML = '<p style="text-align:center;color:var(--mid);padding:16px;">Loading…</p>';
   document.getElementById('final-list-picker-modal').classList.add('active');
 
-  let lists = _getSavedFinalLists(); // local fallback
-  let fetchError = null;               // v42: track WHY we fell back
+  // v44 CRITICAL FIX: this used to treat the Sheet as authoritative and REPLACE
+  // the local cache with whatever came back — then write that back with
+  // _saveFinalListsCache(). So a list saved on this device but not present in the
+  // Sheet response was invisible in the picker AND silently deleted from the cache,
+  // even while the "Last saved" banner (which reads the cache) still showed it.
+  // Merge instead: a list you saved must always remain loadable.
+  const localLists = _getSavedFinalLists().map(fl => ({...fl, _source: 'local'}));
+  let sheetLists = [];
+  let fetchError = null;
 
   if (url) {
     try {
       const json = await androidSafeGet(`${url}?action=getfinallists`);
       if (json.error) throw new Error(json.error);
-      if (json.lists && json.lists.length > 0) {
-        // Sheet is authoritative — normalise field names (Sheet uses itemId, local may use id)
-        lists = _normaliseFinalLists(json.lists.map(fl => ({
-          ...fl,
-          items: (fl.items || []).map(i => ({...i, itemId: i.itemId || i.id})),
-        })));
-        // Update local cache
-        _saveFinalListsCache(lists);
-      }
+      // normalise field names (Sheet uses itemId, local may use id)
+      sheetLists = (json.lists || []).map(fl => ({
+        ...fl,
+        items: (fl.items || []).map(i => ({...i, itemId: i.itemId || i.id})),
+        _source: 'sheet',
+      }));
     } catch(e) {
       console.warn('openFinalListPicker: sheet fetch failed, using local cache', e);
       fetchError = e && e.message ? e.message : String(e);
@@ -4252,11 +4256,31 @@ async function openFinalListPicker(){
     fetchError = 'Not connected to Google Sheets';
   }
 
+  // Sheet copy wins on conflict (it has the canonical items), but local-only
+  // entries survive. _normaliseFinalLists dedupes by listId, keeping the first
+  // occurrence, so sheet entries go in front.
+  const lists = _normaliseFinalLists([...sheetLists, ...localLists]);
+  const onSheet = new Set(sheetLists.map(fl => fl.listId));
+  lists.forEach(fl => { fl._onSheet = onSheet.has(fl.listId); });
+  _saveFinalListsCache(lists);
+
+  const localOnly = lists.filter(fl => !fl._onSheet && !fetchError).length;
+
   container.innerHTML = '';
 
   // v42: a failed fetch used to fall through to "No saved lists yet", which reads
   // as "your lists are gone" when the real problem is that this device could not
   // reach the Sheet. Say which it is.
+  // v44: local-only lists mean a save never landed — say so, and offer a re-push.
+  if (!fetchError && localOnly > 0) {
+    const warn = document.createElement('div');
+    warn.style.cssText = 'background:var(--terra-light);border:2px solid var(--terra-mid);border-radius:var(--radius);padding:12px;margin-bottom:12px;';
+    warn.innerHTML = `
+      <div style="font-size:13px;font-weight:800;color:var(--charcoal);margin-bottom:4px;">📱 ${localOnly} list${localOnly!==1?'s':''} not on the Sheet</div>
+      <div style="font-size:12px;color:var(--charcoal-mid);line-height:1.5;">Saved on this device but missing from Google Sheets, so other devices can't load ${localOnly!==1?'them':'it'}. You can still open ${localOnly!==1?'them':'it'} here. To share, load it and tap <strong>Save List</strong> again.</div>`;
+    container.appendChild(warn);
+  }
+
   if (fetchError) {
     const warn = document.createElement('div');
     warn.style.cssText = 'background:var(--terra-light);border:2px solid var(--terra-mid);border-radius:var(--radius);padding:12px;margin-bottom:12px;';
@@ -4307,7 +4331,8 @@ async function openFinalListPicker(){
           <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;background:${sm.bg};color:${sm.fg};border:1.5px solid ${sm.border};padding:2px 8px;border-radius:6px;margin-right:6px;">${sm.icon} ${fl.store || 'Mixed'}</span>
           ${fl.itemCount} item${fl.itemCount!==1?'s':''}
         </div>
-        <div class="flp-meta">${_finalListWhen(fl)}${fl.createdBy?' · by '+fl.createdBy:''}</div>`;
+        <div class="flp-meta">${_finalListWhen(fl)}${fl.createdBy?' · by '+fl.createdBy:''}</div>
+        ${(!fl._onSheet && !fetchError) ? '<div style="margin-top:5px;font-size:10px;font-weight:800;color:var(--terra-dark);background:var(--terra-light);border:1.5px solid var(--terra-mid);border-radius:6px;padding:2px 7px;display:inline-block;">📱 This device only — not on the Sheet</div>' : ''}`;
       opt.onclick = () => {
         // v40: scope by the list's trip key, not its sweepId. Loading a newer
         // list — including a re-save from the same sweep — is a new trip and
