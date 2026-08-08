@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v42</title>
+<title>Home Inventory v43</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -3443,10 +3443,60 @@ function resetBoughtTicks(){
 // v39: canonical ordering — newest first, whatever the source.
 // The Sheet returns newest-first while local saves appended oldest-last, which is
 // why "Last saved" and the picker were both showing stale lists.
+// v43 CRITICAL FIX: this used to sort by String(createdAt).localeCompare().
+// Google Sheets coerces the ISO string we write into a real Date, so the Apps
+// Script hands back "Fri Aug 07 2026 10:23:45 GMT+0800" rather than
+// "2026-08-07T10:23:45.123Z". Sorting THAT alphabetically sorts by weekday name
+// first — "Tue" > "Sat" > "Fri" — so ordering was effectively random and a June
+// list could outrank an August one. Because _saveFinalListsCache() then slices
+// to 20, a freshly saved list could be dropped from the cache altogether.
+// Sort on a real numeric timestamp instead, and never trust string order again.
+function _finalListTime(fl){
+  if(!fl) return 0;
+  // 1. createdAt — ISO, or a Date-ish locale string after a Sheet round trip
+  if(fl.createdAt){
+    const t = Date.parse(fl.createdAt);
+    if(!isNaN(t)) return t;
+  }
+  // 2. fall back to the stamp inside the listId
+  //    v42+:   FL_20260807T102345_a1b2_Supermarket
+  //    legacy: FL_2026-08-07T1023_Supermarket
+  const id = String(fl.listId||'');
+  let m = id.match(/^FL_(\d{8})T(\d{6})/);
+  if(m){
+    const t = Date.parse(`${m[1].slice(0,4)}-${m[1].slice(4,6)}-${m[1].slice(6,8)}T${m[2].slice(0,2)}:${m[2].slice(2,4)}:${m[2].slice(4,6)}Z`);
+    if(!isNaN(t)) return t;
+  }
+  m = id.match(/^FL_(\d{4}-\d{2}-\d{2}T\d{2})(\d{2})/);
+  if(m){
+    const t = Date.parse(`${m[1]}:${m[2]}:00Z`);
+    if(!isNaN(t)) return t;
+  }
+  return 0;
+}
+
 function _normaliseFinalLists(lists){
+  const seen = {};
   return [...(lists||[])]
     .filter(fl => fl && (fl.listId || fl.label))
-    .sort((a,b) => String(b.createdAt||b.listId||'').localeCompare(String(a.createdAt||a.listId||'')));
+    .map(fl => ({ ...fl, _t: _finalListTime(fl) }))
+    .sort((a,b) => b._t - a._t)
+    // v43: dedupe by listId, newest kept. Pre-v42 listIds were minute-precise, so
+    // two saves in one minute produced duplicate rows the picker couldn't tell apart.
+    .filter(fl => {
+      const k = fl.listId || fl.label;
+      if(seen[k]) return false;
+      seen[k] = true;
+      return true;
+    });
+}
+
+// v43: the Sheet doesn't return the friendly `created` string, and raw createdAt
+// may be a locale Date string. Render something readable either way.
+function _finalListWhen(fl){
+  const t = _finalListTime(fl);
+  if(!t) return fl.created || fl.createdAt || '';
+  return new Date(t).toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
 }
 
 const STORE_META = {
@@ -3614,7 +3664,7 @@ function renderFinalList(){
     banner.innerHTML = `
       <div class="fsb-text">
         <div>Last saved: ${latest.label}</div>
-        <div class="fsb-time">${latest.itemCount} items · ${latest.created}</div>
+        <div class="fsb-time">${latest.itemCount} items · ${_finalListWhen(latest)}</div>
       </div>
       <div style="display:flex;gap:6px;">
         <button onclick="openRegenFromSweepPicker()" style="border:none;background:var(--blush);color:var(--charcoal-mid);padding:8px 10px;border-radius:8px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid var(--blush-mid);">🔄</button>
@@ -4257,7 +4307,7 @@ async function openFinalListPicker(){
           <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;background:${sm.bg};color:${sm.fg};border:1.5px solid ${sm.border};padding:2px 8px;border-radius:6px;margin-right:6px;">${sm.icon} ${fl.store || 'Mixed'}</span>
           ${fl.itemCount} item${fl.itemCount!==1?'s':''}
         </div>
-        <div class="flp-meta">${fl.created || fl.createdAt || ''}${fl.createdBy?' · by '+fl.createdBy:''}</div>`;
+        <div class="flp-meta">${_finalListWhen(fl)}${fl.createdBy?' · by '+fl.createdBy:''}</div>`;
       opt.onclick = () => {
         // v40: scope by the list's trip key, not its sweepId. Loading a newer
         // list — including a re-save from the same sweep — is a new trip and
