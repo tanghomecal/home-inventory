@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v47</title>
+<title>Home Inventory v48</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -586,6 +586,14 @@
   .adhoc-item.is-added .adhoc-step-btn{color:var(--teal-dark);}
   .adhoc-step-num{min-width:36px;text-align:center;font-size:17px;font-weight:800;font-family:var(--mono);color:var(--charcoal);background:white;border-left:1px solid var(--blush-mid);border-right:1px solid var(--blush-mid);height:36px;display:flex;align-items:center;justify-content:center;}
   .adhoc-step-num.zero{color:#C0B0A8;}
+  /* v48: uncounted is a real state, visually distinct from a counted zero */
+  .adhoc-step-num.uncounted{color:#C0B0A8;font-weight:600;}
+  .adhoc-push-btn{width:38px;height:38px;flex-shrink:0;border:1.5px solid var(--violet-mid);border-radius:10px;background:var(--violet-light);font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.12s;padding:0;}
+  .adhoc-push-btn:active{transform:scale(0.94);}
+  .adhoc-push-btn.on{background:var(--terra-light);border-color:var(--teal-mid);color:var(--violet-dark);}
+  .adhoc-stock-tag{font-weight:800;color:var(--teal-dark);}
+  .adhoc-stock-tag.out{color:var(--coral);}
+  .adhoc-stock-tag.uncounted{color:var(--blush-dark);font-weight:700;font-style:italic;}
   .adhoc-item.is-added .adhoc-step-num{color:var(--teal-dark);border-color:var(--teal-mid);}
 
   /* Custom item row */
@@ -876,7 +884,7 @@
       </div>
     </div>
     <div class="adhoc-qty-row">
-      <span class="adhoc-qty-label">Qty:</span>
+      <span class="adhoc-qty-label">Stock left:</span>
       <div class="adhoc-qty-stepper">
         <button class="adhoc-qty-step-btn" onclick="adhocCustomQtyStep(-1)">−</button>
         <div class="adhoc-qty-num" id="adhoc-custom-qty">1</div>
@@ -1516,6 +1524,11 @@ function buildRoomsFromItems(items) {
 
   // Ensure state has entries for all items
   ALL_ITEMS.forEach(i => { if (!state[i.id]) state[i.id] = {qty:null, note:''}; });
+
+  // v48: this function rebuilds ALL_ITEMS/ITEM_MAP from scratch every time items
+  // are refreshed, which silently dropped any ad hoc custom_* item injected
+  // earlier in the session. Re-add them from the local cache on every rebuild.
+  _injectAdhocCustomItems();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1916,6 +1929,7 @@ function renderHome() {
   }
   let total=0,checked=0,need=0;
   ALL_ITEMS.forEach(item=>{
+    if (item.adhocCustom) return;   // v48: ad hoc free-form items aren't master-list stock
     total++;
     const s=state[item.id];
     if (!s) return;
@@ -1998,7 +2012,7 @@ function onSearch(val){
   if(!q){results.classList.remove('visible');results.style.display='none';main.style.display='block';clearBtn.classList.remove('visible');return;}
   clearBtn.classList.add('visible');
   results.style.display='block';results.classList.add('visible');main.style.display='none';
-  const matches=ALL_ITEMS.filter(i=>i.name.toLowerCase().includes(q));
+  const matches=ALL_ITEMS.filter(i=>!i.adhocCustom && i.name.toLowerCase().includes(q));
   results.innerHTML='';
   if(!matches.length){results.innerHTML=`<div style="padding:30px;text-align:center;color:#B0907A;font-size:15px;font-weight:600;">No items found for "<strong>${val}</strong>"</div>`;return;}
   matches.forEach(item=>{
@@ -2832,6 +2846,20 @@ function _fetchStockAndRender(url){
       if (p.note) state[id].note = p.note;
     });
 
+    // v48: rebuild ad hoc custom items from the metadata carried in the prelim.
+    // These ids are in no Sheet tab, so without this the buying device holds
+    // their state but has no ALL_ITEMS entry to render — the item is simply
+    // absent from the checklist with no indication anything is missing.
+    const prelimCustom = {};
+    Object.entries(prelimState).forEach(([id, p]) => {
+      if (p && p.meta && p.meta.id) prelimCustom[id] = p.meta;
+    });
+    if (Object.keys(prelimCustom).length) {
+      const merged = Object.assign(_getAdhocCustomMeta(), prelimCustom);
+      _saveAdhocCustomMeta(merged);
+      _injectAdhocCustomItems(merged);
+    }
+
     // Track which sweepId's prelim is loaded
     if (sweepId) localStorage.setItem(KEY_PRELIM_SWEEP_ID, sweepId);
 
@@ -3094,15 +3122,26 @@ function renderShoppingList(){
         row.className='shop-item'+(item.must?' must-shop':'')+(isAlreadyConfirmed?' psc-confirmed':'');
         row.style.cssText='border-radius:0;margin:0;'+(idx<scItems.length-1?'border-bottom:1px solid var(--blush-mid);':'');
         row.id='shoprow-'+item.id;
-        const curQty = (state[item.id]||{}).qty ?? 0;
+        // v48: null qty is "nobody counted", NOT zero. Collapsing it to 0 told the
+        // buyer the shelf was empty when in fact no one had looked — and made a
+        // real, deliberate 0 ("we're out") indistinguishable from silence.
+        const rawQty  = (state[item.id]||{}).qty;
+        const isUncounted = rawQty === null || rawQty === undefined;
+        const curQty  = isUncounted ? 0 : rawQty;          // for the maths
+        const curDisplay = isUncounted ? '—' : curQty;      // for the eyes
         const lastQtyForItem = getLastQty(item.id);
         const lastDisplay = lastQtyForItem !== null ? lastQtyForItem : '—';
         const minStockForItem = item.min || 1;  // default min = 1
         // Suggested qty = max(0, min - current). If force-buy with qty > min, suggest 1.
+        // v48: with no count there is nothing to subtract from, so suggest the
+        // item's normal stock level. Under-informed means "buy the usual amount",
+        // which is the safe direction to fail in.
         const suggestedQty = isAlreadyConfirmed
           ? finalListCache[item.id]
+          : isUncounted
+          ? Math.max(1, minStockForItem)
           : Math.max(1, minStockForItem - curQty);
-        const invClass = curQty === 0 ? 'zero' : curQty <= (item.min||1) ? 'low' : 'ok';
+        const invClass = isUncounted ? '' : curQty === 0 ? 'zero' : curQty <= (item.min||1) ? 'low' : 'ok';
         // Credibility label
         // v39: three-way — ★ VERIFIED (mandatory, counted) / 🛒 REQUESTED (pushed
         // to buy by the shopper) / REPORTED (recorded but not mandatory)
@@ -3115,6 +3154,11 @@ function renderShoppingList(){
         // v41: Push to Buy removed from the checklist — "Add to Final List" already
         // does the same job. forceBuy now only comes from the + Add Item button, so
         // the one thing still needed here is a way to undo a mis-tapped addition.
+        // v48: a requested item with no stock count is a weaker claim than a
+        // counted one — say so, so the buyer knows to use their own judgement.
+        const uncountedChip = (isUncounted && isForcedBuy)
+          ? `<span style="display:inline-flex;align-items:center;font-size:10px;font-weight:800;background:var(--blush);color:var(--blush-dark);border:1.5px dashed var(--blush-dark);padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">NOT COUNTED</span>`
+          : '';
         const isChecklistOnlyByRequest = !item.must && isForcedBuy;
         const removeHtml = isChecklistOnlyByRequest
           ? `<button class="psc-remove-btn" onclick="removeFromChecklist('${item.id}',event)">✕ Remove from checklist</button>`
@@ -3125,7 +3169,7 @@ function renderShoppingList(){
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
               <span style="font-size:11px;font-weight:800;font-family:var(--mono);color:var(--mid);background:var(--blush);border:1.5px solid var(--blush-mid);padding:1px 6px;border-radius:6px;flex-shrink:0;">${itemNum}</span>
               <span class="shop-item-name">${item.name}</span>
-              ${credLabel}
+              ${credLabel}${uncountedChip}
             </div>
             <div class="shop-qty-table" style="margin-bottom:10px;">
               <div class="sqt-cell cell-last">
@@ -3134,7 +3178,7 @@ function renderShoppingList(){
               </div>
               <div class="sqt-cell cell-inv ${invClass}">
                 <div class="sqt-label">In Stock</div>
-                <div class="sqt-num">${curQty}</div>
+                <div class="sqt-num"${isUncounted?' style="color:var(--blush-dark);"':''}>${curDisplay}</div>
               </div>
               <div class="sqt-cell" style="background:var(--sage-light);border-color:var(--sage-mid);">
                 <div class="sqt-label">Min Stock</div>
@@ -4630,21 +4674,90 @@ async function syncPrelimToSheet() {
 // v33: AD HOC SHOPPING LIST
 // ═══════════════════════════════════════════════════════════
 // Completely sweep-independent. State lives in adhocList:
-//   { [itemId]: { name, store, subcat, qty, custom?: true } }
+//   { [itemId]: { name, store, subcat, onList, qty, custom?: true } }
 // Custom (free-form) items get a synthetic id: 'custom_<timestamp>'
+//
+// v48 MODEL CHANGE — membership and stock are two separate facts.
+//   onList : true  = "put this on the prelim list"  → becomes forceBuy on submit
+//   qty    : null  = on the list but NOT counted    → prelim shows "—"
+//            0     = counted, we are out            → prelim shows 0
+//            n     = counted, n left on the shelf   → prelim shows n
+//
+// Before v48 a single number did both jobs: qty > 0 meant "on the list" AND was
+// written into state.qty, which downstream means STOCK ON HAND. So an ad hoc
+// "apples ×10" reached the buyer as "10 apples in stock" and suggested buying 1.
+// It also made "we're out of milk" (0 left) impossible to express, because 0 was
+// the remove action. Both are fixed by splitting the two fields.
 
-let adhocList        = {};              // items on the ad hoc list {id: {name,store,subcat,qty,custom?}}
+let adhocList        = {};              // {id: {name,store,subcat,onList,qty,custom?}}
 let adhocSearch      = '';             // current search query string
 let adhocCustomStore = 'Supermarket'; // store selected in custom-item modal
 
-const KEY_ADHOC = 'inv_adhocList';
+const KEY_ADHOC        = 'inv_adhocList';
+const KEY_ADHOC_CUSTOM = 'inv_adhocCustomMeta';  // v48: {id: {id,name,store,subcat}} for custom_* items
 
 function loadAdhocState() {
   try { const r = localStorage.getItem(KEY_ADHOC); if (r) adhocList = JSON.parse(r); } catch(e) { adhocList = {}; }
+  // v48 migration: pre-v48 entries used qty>0 as membership, and that qty meant
+  // "how many I want" — NOT stock on hand. Carrying it over would assert a stock
+  // level nobody measured, so membership is kept and the count is reset to
+  // uncounted. Legacy lists therefore submit as "requested, not counted".
+  let migrated = false;
+  Object.values(adhocList).forEach(i => {
+    if (i.onList === undefined) {
+      i.onList = (i.qty || 0) > 0;
+      i.qty    = null;
+      migrated = true;
+    }
+  });
+  if (migrated) saveAdhocState();
 }
 
 function saveAdhocState() {
   localStorage.setItem(KEY_ADHOC, JSON.stringify(adhocList));
+}
+
+// v48: how a stock count reads on screen. null is a real value, not zero.
+function _adhocQtyLabel(qty) {
+  return (qty === null || qty === undefined) ? '—' : String(qty);
+}
+
+// v48: every entry currently destined for the prelim list
+function _adhocOnList() {
+  return Object.values(adhocList).filter(i => i.onList);
+}
+
+// ── CUSTOM ITEM METADATA (v48) ────────────────────────────────────────────────
+// custom_* ids exist nowhere in 📋 Items, so ITEM_MAP/ALL_ITEMS have no entry for
+// them. renderShoppingList() iterates ALL_ITEMS, so without this they render once
+// (in the submitting session, from an in-memory injection) and then vanish on the
+// next boot and never appear at all on the buying device. Cached locally AND
+// carried inside the prelim payload so both paths can rebuild them.
+function _getAdhocCustomMeta() {
+  try { return JSON.parse(localStorage.getItem(KEY_ADHOC_CUSTOM) || '{}'); } catch(e) { return {}; }
+}
+
+function _saveAdhocCustomMeta(map) {
+  localStorage.setItem(KEY_ADHOC_CUSTOM, JSON.stringify(map));
+}
+
+// Add custom items into the live item index if they aren't already there.
+// Safe to call repeatedly — buildRoomsFromItems() rebuilds ALL_ITEMS from the
+// Sheet and would otherwise drop them every time items are refreshed.
+function _injectAdhocCustomItems(metaMap) {
+  const map = metaMap || _getAdhocCustomMeta();
+  Object.values(map).forEach(m => {
+    if (!m || !m.id || ITEM_MAP[m.id]) return;
+    const entry = {
+      id: m.id, name: m.name, store: m.store || 'Supermarket',
+      subcat: m.subcat || '', must: false, min: 0,
+      roomId: 'adhoc', roomName: 'Ad Hoc',
+      adhocCustom: true,   // v48: excluded from room/home/master-list rendering
+    };
+    ITEM_MAP[m.id] = entry;
+    ALL_ITEMS.push(entry);
+    if (!state[m.id]) state[m.id] = { qty: null, note: '' };
+  });
 }
 
 // ── ENTRY POINT ───────────────────────────────────────────────────────────────
@@ -4682,9 +4795,12 @@ function renderAdhoc() {
     return;
   }
 
+  // v48: custom items live in ALL_ITEMS so the checklist can render them, but
+  // they have their own section below — excluded here to avoid a duplicate row.
+  const masterItems = ALL_ITEMS.filter(i => !i.adhocCustom);
   const visibleItems = q
-    ? ALL_ITEMS.filter(i => i.name.toLowerCase().includes(q))
-    : ALL_ITEMS;
+    ? masterItems.filter(i => i.name.toLowerCase().includes(q))
+    : masterItems;
 
   // Group by store → subcat
   const storeGroups = { Supermarket: {}, 'Wet Market': {}, Online: {} };
@@ -4726,7 +4842,7 @@ function renderAdhoc() {
 
     // Count how many are added
     const addedCount = Object.values(adhocList).filter(
-      i => i.store === key && (i.qty || 0) > 0
+      i => i.store === key && i.onList
     ).length;
 
     const safeKey = key.replace(/\s/g, '');
@@ -4796,100 +4912,159 @@ function renderAdhoc() {
   updateAdhocSummary();
 }
 
-// Build a single master-list item row with stepper
+// v48: shared row body. Two controls, and BOTH of them add the item to the list:
+// the stepper (you counted) and Push to Buy (you didn't). Neither can leave the
+// row in a half-state, and ✕ is the only way off the list — so counting down to
+// zero now means "we're out" instead of silently removing the item.
+function _adhocRowInner(id, nameHtml, metaText) {
+  const entry  = adhocList[id];
+  const onList = !!(entry && entry.onList);
+  const qty    = entry ? entry.qty : null;
+  const counted = onList && qty !== null && qty !== undefined;
+
+  const stockLine = onList
+    ? (counted
+        ? `<span class="adhoc-stock-tag${qty === 0 ? ' out' : ''}">${qty === 0 ? 'None left' : qty + ' left'}</span>`
+        : `<span class="adhoc-stock-tag uncounted">Not counted</span>`)
+    : '';
+
+  return `
+    <div class="adhoc-item-info">
+      <div class="adhoc-item-name">${nameHtml}</div>
+      <div class="adhoc-item-meta">${metaText || ''}${metaText && stockLine ? ' · ' : ''}${stockLine}</div>
+    </div>
+    <div class="adhoc-stepper" id="adhoc-stepper-${id}">
+      <button class="adhoc-step-btn" onclick="adhocStep('${id}', -1, event)">−</button>
+      <div class="adhoc-step-num${counted ? (qty === 0 ? ' zero' : '') : ' uncounted'}" id="adhoc-num-${id}">${_adhocQtyLabel(onList ? qty : null)}</div>
+      <button class="adhoc-step-btn" onclick="adhocStep('${id}', 1, event)">+</button>
+    </div>
+    <button class="adhoc-push-btn${onList ? ' on' : ''}" id="adhoc-push-${id}"
+      onclick="adhocTogglePush('${id}', event)"
+      title="${onList ? 'Remove from list' : 'Push to buy'}">${onList ? '✕' : '🛒'}</button>`;
+}
+
+// Build a single master-list item row
 function _adhocItemRow(item) {
-  const entry = adhocList[item.id];
-  const qty   = entry ? (entry.qty || 0) : 0;
-  const added = qty > 0;
+  const entry  = adhocList[item.id];
+  const onList = !!(entry && entry.onList);
 
   const row = document.createElement('div');
-  row.className = 'adhoc-item' + (added ? ' is-added' : '');
+  row.className = 'adhoc-item' + (onList ? ' is-added' : '');
   row.id = 'adhoc-row-' + item.id;
-  row.innerHTML = `
-    <div class="adhoc-item-info">
-      <div class="adhoc-item-name${item.must ? ' must' : ''}">${item.name}</div>
-      <div class="adhoc-item-meta">${item.subcat || ''}</div>
-    </div>
-    <div class="adhoc-stepper" id="adhoc-stepper-${item.id}">
-      <button class="adhoc-step-btn" onclick="adhocStep('${item.id}', -1, event)">−</button>
-      <div class="adhoc-step-num${qty === 0 ? ' zero' : ''}" id="adhoc-num-${item.id}">${qty === 0 ? '0' : qty}</div>
-      <button class="adhoc-step-btn" onclick="adhocStep('${item.id}', 1, event)">+</button>
-    </div>`;
+  row.innerHTML = _adhocRowInner(
+    item.id,
+    `${item.name}${item.must ? ' ★' : ''}`,
+    item.subcat || ''
+  );
   return row;
 }
 
-// Build a custom item row with stepper + remove button
+// Build a custom item row. ✕ deletes the item outright here rather than just
+// taking it off the list — a free-form item has nowhere to go once removed.
 function _adhocCustomRow(ci) {
-  const qty   = ci.qty || 0;
-  const added = qty > 0;
-  const row   = document.createElement('div');
-  row.className = 'adhoc-item' + (added ? ' is-added' : '');
+  const row = document.createElement('div');
+  row.className = 'adhoc-item' + (ci.onList ? ' is-added' : '');
   row.id = 'adhoc-row-' + ci.id;
-  row.innerHTML = `
-    <div class="adhoc-item-info">
-      <div class="adhoc-item-name">${ci.name} <span class="adhoc-custom-badge">custom</span></div>
-      <div class="adhoc-item-meta">${ci.store}</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:6px;">
-      <div class="adhoc-stepper" id="adhoc-stepper-${ci.id}">
-        <button class="adhoc-step-btn" onclick="adhocStep('${ci.id}', -1, event)">−</button>
-        <div class="adhoc-step-num${qty === 0 ? ' zero' : ''}" id="adhoc-num-${ci.id}">${qty}</div>
-        <button class="adhoc-step-btn" onclick="adhocStep('${ci.id}', 1, event)">+</button>
-      </div>
-      <button onclick="removeAdhocCustom('${ci.id}', event)"
-        style="border:none;background:var(--terra-light);color:var(--violet-dark);width:32px;height:32px;border-radius:8px;font-size:15px;cursor:pointer;flex-shrink:0;">✕</button>
-    </div>`;
+  row.innerHTML = _adhocRowInner(
+    ci.id,
+    `${ci.name} <span class="adhoc-custom-badge">custom</span>`,
+    ci.store
+  ).replace(
+    `onclick="adhocTogglePush('${ci.id}', event)"`,
+    `onclick="removeAdhocCustom('${ci.id}', event)"`
+  );
   return row;
 }
 
-// ── STEPPER ───────────────────────────────────────────────────────────────────
+// ── ENTRY CREATION ────────────────────────────────────────────────────────────
+// v48: pulls name/store/subcat off the master list. Created off-list with an
+// uncounted stock value — the caller decides what to set.
+function _ensureAdhocEntry(itemId) {
+  if (adhocList[itemId]) return adhocList[itemId];
+  const masterItem = ITEM_MAP[itemId];
+  if (!masterItem) return null;
+  adhocList[itemId] = {
+    id:     itemId,
+    name:   masterItem.name,
+    store:  masterItem.store || 'Supermarket',
+    subcat: masterItem.subcat || '',
+    onList: false,
+    qty:    null,
+  };
+  return adhocList[itemId];
+}
+
+// ── STEPPER — records STOCK ON HAND, not the amount to buy ────────────────────
+// From uncounted (—): + gives 1, − gives 0. Both are one tap, and both put the
+// item on the list, so a count can never be stranded on a row that was never
+// pushed. Zero is a countable value now; ✕ is the only way off the list.
 function adhocStep(itemId, delta, event) {
   if (event) event.stopPropagation();
 
-  // Get current qty
-  const numEl = document.getElementById('adhoc-num-' + itemId);
-  let qty = numEl ? parseInt(numEl.textContent, 10) : 0;
-  if (isNaN(qty)) qty = 0;
-  qty = Math.max(0, qty + delta);
+  const entry = _ensureAdhocEntry(itemId);
+  if (!entry) return;
 
-  // Update state
-  if (qty === 0) {
-    // Keep entry but set qty to 0 (don't delete — user may want to re-add)
-    if (adhocList[itemId]) adhocList[itemId].qty = 0;
-  } else {
-    if (!adhocList[itemId]) {
-      // Look up from master list
-      const masterItem = ITEM_MAP[itemId];
-      if (masterItem) {
-        adhocList[itemId] = {
-          id:     itemId,
-          name:   masterItem.name,
-          store:  masterItem.store || 'Supermarket',
-          subcat: masterItem.subcat || '',
-          qty,
-        };
-      }
-    } else {
-      adhocList[itemId].qty = qty;
-    }
-  }
+  const wasUncounted = entry.qty === null || entry.qty === undefined;
+  entry.qty = wasUncounted
+    ? (delta > 0 ? 1 : 0)
+    : Math.max(0, entry.qty + delta);
+  entry.onList = true;   // counting is committing
+
   saveAdhocState();
-
-  // Update DOM in-place (no full re-render)
-  if (numEl) {
-    numEl.textContent = qty;
-    numEl.className   = 'adhoc-step-num' + (qty === 0 ? ' zero' : '');
-  }
-  const row = document.getElementById('adhoc-row-' + itemId);
-  if (row) row.className = 'adhoc-item' + (qty > 0 ? ' is-added' : '');
-
+  _refreshAdhocRow(itemId);
   updateAdhocSummary();
+}
+
+// ── PUSH TO BUY — membership without a count ──────────────────────────────────
+// The "grab milk on the way home" path: on the list, stock left as "—". The
+// prelim shows NOT COUNTED and falls back to the item's min for the suggested
+// buy, so an uninformed entry still produces a sane quantity.
+function adhocTogglePush(itemId, event) {
+  if (event) event.stopPropagation();
+
+  const entry = _ensureAdhocEntry(itemId);
+  if (!entry) return;
+
+  if (entry.onList) {
+    entry.onList = false;
+    entry.qty    = null;   // taking it off clears the count too
+  } else {
+    entry.onList = true;
+  }
+
+  saveAdhocState();
+  _refreshAdhocRow(itemId);
+  updateAdhocSummary();
+}
+
+// Re-render one row in place — cheaper than a full renderAdhoc() and keeps the
+// scroll position, which matters on a long master list.
+function _refreshAdhocRow(itemId) {
+  const row = document.getElementById('adhoc-row-' + itemId);
+  if (!row) return;
+  const entry = adhocList[itemId];
+  const item  = ITEM_MAP[itemId] || entry;
+  if (!item) return;
+
+  if (entry && entry.custom) {
+    row.innerHTML = _adhocCustomRow(entry).innerHTML;
+  } else {
+    row.innerHTML = _adhocRowInner(
+      itemId,
+      `${item.name}${item.must ? ' ★' : ''}`,
+      item.subcat || ''
+    );
+  }
+  row.className = 'adhoc-item' + (entry && entry.onList ? ' is-added' : '');
 }
 
 function removeAdhocCustom(itemId, event) {
   if (event) event.stopPropagation();
   delete adhocList[itemId];
   saveAdhocState();
+  const meta = _getAdhocCustomMeta();
+  delete meta[itemId];
+  _saveAdhocCustomMeta(meta);
   renderAdhoc();
 }
 
@@ -4917,7 +5092,7 @@ function updateAdhocSummary() {
 
   const counts = { Supermarket: 0, 'Wet Market': 0, Online: 0 };
   Object.values(adhocList).forEach(i => {
-    if ((i.qty || 0) > 0 && counts[i.store] !== undefined) counts[i.store]++;
+    if (i.onList && counts[i.store] !== undefined) counts[i.store]++;
   });
 
   const total = counts.Supermarket + counts['Wet Market'] + counts.Online;
@@ -4937,7 +5112,7 @@ function updateAdhocSummary() {
 function openAdhocCustomModal(defaultStore) {
   adhocCustomStore = defaultStore || 'Supermarket';
   document.getElementById('adhoc-custom-name').value = '';
-  document.getElementById('adhoc-custom-qty').textContent = '1';
+  document.getElementById('adhoc-custom-qty').textContent = '—';   // v48: uncounted by default
   _updateAdhocStorePills();
   document.getElementById('adhoc-custom-overlay').classList.add('active');
   setTimeout(() => document.getElementById('adhoc-custom-name').focus(), 300);
@@ -4962,10 +5137,15 @@ function _updateAdhocStorePills() {
   document.getElementById('adhoc-store-online').classList.toggle('active', adhocCustomStore === 'Online');
 }
 
+// v48: mirrors the row stepper — from —, + gives 1 and − gives 0 ("none left").
 function adhocCustomQtyStep(delta) {
   const el  = document.getElementById('adhoc-custom-qty');
-  let qty   = parseInt(el.textContent, 10) || 1;
-  qty = Math.max(1, qty + delta);
+  const cur = el.textContent.trim();
+  if (cur === '—' || cur === '') {
+    el.textContent = delta > 0 ? '1' : '0';
+    return;
+  }
+  const qty = Math.max(0, (parseInt(cur, 10) || 0) + delta);
   el.textContent = qty;
 }
 
@@ -4974,18 +5154,30 @@ function confirmAddCustomItem() {
   const name   = nameEl ? nameEl.value.trim() : '';
   if (!name) { nameEl && nameEl.focus(); showToast('Please enter an item name'); return; }
 
-  const qty = parseInt(document.getElementById('adhoc-custom-qty').textContent, 10) || 1;
-  const id  = 'custom_' + Date.now();
+  // v48: the modal's number is a STOCK count now, and "—" is its default —
+  // adding a free-form item is an explicit request, so it goes straight onto the
+  // list regardless of whether anyone counted what's left.
+  const qtyText = document.getElementById('adhoc-custom-qty').textContent.trim();
+  const qty     = (qtyText === '—' || qtyText === '') ? null : (parseInt(qtyText, 10) || 0);
+  const id      = 'custom_' + Date.now();
 
   adhocList[id] = {
     id,
     name,
     store:  adhocCustomStore,
     subcat: '',
+    onList: true,
     qty,
     custom: true,
   };
   saveAdhocState();
+
+  // Cache metadata now, not at submit — a custom item must survive a reload even
+  // if the list is still being built.
+  const meta = _getAdhocCustomMeta();
+  meta[id] = { id, name, store: adhocCustomStore, subcat: '', custom: true };
+  _saveAdhocCustomMeta(meta);
+  _injectAdhocCustomItems(meta);
   closeAdhocCustomModal();
   renderAdhoc();
   showToast(`✓ "${name}" added`);
@@ -4998,7 +5190,7 @@ document.getElementById('adhoc-custom-overlay').addEventListener('click', e => {
 
 // ── CLEAR ─────────────────────────────────────────────────────────────────────
 function clearAdhocList() {
-  const total = Object.values(adhocList).filter(i => (i.qty || 0) > 0).length;
+  const total = _adhocOnList().length;
   if (total === 0) { showToast('List is already empty'); return; }
   if (!confirm(`Clear all ${total} item${total !== 1 ? 's' : ''} from the ad hoc list?`)) return;
   adhocList = {};
@@ -5009,7 +5201,7 @@ function clearAdhocList() {
 
 // ── SHARE ─────────────────────────────────────────────────────────────────────
 function shareAdhocList() {
-  const items = Object.values(adhocList).filter(i => (i.qty || 0) > 0);
+  const items = _adhocOnList();
   if (!items.length) { showToast('Nothing to share yet!'); return; }
 
   const byStore = { Supermarket: [], 'Wet Market': [], Online: [] };
@@ -5023,9 +5215,17 @@ function shareAdhocList() {
   ['Supermarket', 'Wet Market', 'Online'].forEach(s => {
     if (!byStore[s].length) return;
     text += `\n${storeIcons[s]} ${s.toUpperCase()} (${byStore[s].length})\n`;
+    // v48: the number is STOCK REMAINING, not a quantity to buy. Printing "×2"
+    // read as "buy 2" to whoever received the message — the exact inversion the
+    // v48 model change exists to prevent. Spelled out instead.
     byStore[s]
       .sort((a, b) => a.name.localeCompare(b.name))
-      .forEach(i => { text += `  • ${i.name}  ×${i.qty}${i.custom ? ' ✏️' : ''}\n`; });
+      .forEach(i => {
+        const stock = (i.qty === null || i.qty === undefined)
+          ? 'stock not counted'
+          : i.qty === 0 ? 'none left' : `${i.qty} left`;
+        text += `  • ${i.name} — ${stock}${i.custom ? ' ✏️' : ''}\n`;
+      });
   });
 
   if (navigator.share) navigator.share({ title: 'Ad Hoc Shopping List', text });
@@ -5042,10 +5242,22 @@ function shareAdhocList() {
 //   5. Other devices pick it up via checkSweepDoneFromSheet on their next boot/sync
 async function submitAdhocToPrelim() {
   const url   = localStorage.getItem(KEY_URL);
-  const items = Object.values(adhocList).filter(i => (i.qty || 0) > 0);
+  const items = _adhocOnList();
 
   if (!items.length) { showToast('Add some items first!'); return; }
   if (!url)          { showToast('Connect to Google Sheets first'); return; }
+
+  // v48: non-blocking nudge, never a gate. An uncounted item is a valid entry —
+  // this just surfaces the count before it reaches someone who can't verify it.
+  const uncounted = items.filter(i => i.qty === null || i.qty === undefined).length;
+  if (uncounted > 0) {
+    const ok = confirm(
+      `${items.length} item${items.length !== 1 ? 's' : ''} — ${uncounted} without a stock count.\n\n` +
+      `Uncounted items reach the buyer as "not counted" and default to the normal buy quantity.\n\n` +
+      `Submit anyway?`
+    );
+    if (!ok) return;
+  }
 
   const btn  = document.getElementById('adhoc-submit-btn');
   if (btn) { btn.classList.add('loading'); btn.textContent = 'Submitting…'; }
@@ -5058,15 +5270,32 @@ async function submitAdhocToPrelim() {
   // Synthetic sweepId — same format as a real sweep so all downstream logic works
   const sweepId = 'ADHOC_' + now.toISOString().slice(0, 16).replace(/[-:T]/g, '') + '_' + user.replace(/\s+/g, '');
 
-  // Build state object for saveprelimlist (itemId → {qty, note, forceBuy})
+  // Build state object for saveprelimlist (itemId → {qty, note, forceBuy, meta?})
   // Custom items get stored with their synthetic id; master items use their real id
+  //
+  // v48 — forceBuy is TRUE for every ad hoc item, and this is the fix for the
+  // "submitted but nothing in Pre-Shopping" fault. renderShoppingList() admits an
+  // item only if it is a counted ★ must-have OR force-buy; ad hoc wrote
+  // forceBuy:false, so every non-★ item was silently dropped after a successful
+  // submit. forceBuy is also the honest flag post-v41: it means "a human asked
+  // for this" rather than "a sweep counted it", which is exactly what ad hoc is.
+  //
+  // qty carries STOCK ON HAND and null is preserved deliberately — the prelim
+  // renders it as "—" so the buyer can tell an uncounted item from a real zero.
   const prelimState = {};
   items.forEach(i => {
-    prelimState[i.id] = {
-      qty:      i.qty,
+    const entry = {
+      qty:      (i.qty === undefined) ? null : i.qty,
       note:     i.custom ? '✏️ Custom item' : '',
-      forceBuy: false,
+      forceBuy: true,
     };
+    // v48: custom_* ids exist in no Sheet tab, so the buying device has no way to
+    // resolve a name or store for them. Carried inline; savePrelimList stringifies
+    // the whole state object, so extra keys survive with no Apps Script change.
+    if (i.custom) {
+      entry.meta = { id: i.id, name: i.name, store: i.store || 'Supermarket', subcat: i.subcat || '', custom: true };
+    }
+    prelimState[i.id] = entry;
   });
 
   // Determine scope from which stores are present
@@ -5089,19 +5318,25 @@ async function submitAdhocToPrelim() {
     }), 'saving the ad hoc list');
 
     // 2. Log to Sweep History so lastsweep returns it and other devices see the banner
-    await androidSafePost(url, {
+    //
+    // v48: rooms MUST be an array. Apps Script does (body.rooms || []).join(", ")
+    // — passing the string 'Ad Hoc' threw a TypeError server-side, doPost caught it
+    // and returned {error}, and because this call was never asserted the failure
+    // was completely silent. No history row means lastsweep never returns the ad
+    // hoc list, so it never reached the sweep picker on the buying device.
+    _assertSheetOk(await androidSafePost(url, {
       action:       'history',
       sweepDate:    dateStr,
       sweepTime:    timeStr,
       completedBy:  user,
-      rooms:        'Ad Hoc',
+      rooms:        ['Ad Hoc'],
       itemsChecked: totalCount,
       itemsNeeded:  totalCount,
       status:       'Ad Hoc',
       scope,
-      notes:        `${masterCount} from list${customCount > 0 ? ', ' + customCount + ' custom' : ''}`,
+      notes:        `${masterCount} from list${customCount > 0 ? ', ' + customCount + ' custom' : ''}${uncounted > 0 ? ', ' + uncounted + ' uncounted' : ''}`,
       sweepId,
-    });
+    }), 'logging the ad hoc list to Sweep History');
 
     savedOk = true;
   } catch(e) {
@@ -5121,18 +5356,26 @@ async function submitAdhocToPrelim() {
   // 5. Load the ad hoc state into the in-memory state so the Pre-Shopping tab
   //    renders immediately without needing to fetch from Sheet first.
   //    We set KEY_SWEEP to 'false' (not active) but populate state so items show.
+  // v48: mirrors prelimState exactly — same forceBuy, same nullable qty. Any
+  // divergence here shows up as the checklist looking different before and after
+  // a reload, which is how the old forceBuy:false bug stayed hidden for so long.
   localStorage.setItem(KEY_SWEEP, 'false');
   items.forEach(i => {
-    state[i.id] = { qty: i.qty, note: i.custom ? '✏️ Custom item' : '', forceBuy: false };
+    state[i.id] = {
+      qty:      (i.qty === undefined) ? null : i.qty,
+      note:     i.custom ? '✏️ Custom item' : '',
+      forceBuy: true,
+    };
   });
-  // Also store item metadata for custom items so Pre-Shopping can render them
-  if (!window._adhocCustomMeta) window._adhocCustomMeta = {};
+
+  // v48: persist custom item metadata, then inject. Previously this was written
+  // to a window global and lost on reload, so custom items rendered exactly once.
+  const customMeta = _getAdhocCustomMeta();
   items.filter(i => i.custom).forEach(i => {
-    // Inject into ITEM_MAP so renderShoppingList can find the name/store/subcat
-    ITEM_MAP[i.id] = { id: i.id, name: i.name, store: i.store, subcat: i.subcat || '', must: false, roomId: 'adhoc', roomName: 'Ad Hoc' };
-    ALL_ITEMS.push(ITEM_MAP[i.id]);
-    window._adhocCustomMeta[i.id] = ITEM_MAP[i.id];
+    customMeta[i.id] = { id: i.id, name: i.name, store: i.store || 'Supermarket', subcat: i.subcat || '', custom: true };
   });
+  _saveAdhocCustomMeta(customMeta);
+  _injectAdhocCustomItems(customMeta);
 
   // 6. Set currentSweepMeta so the sweep info banner shows in Pre-Shopping
   currentSweepMeta = {
