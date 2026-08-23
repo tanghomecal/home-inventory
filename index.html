@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v48</title>
+<title>Home Inventory v49</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -1036,6 +1036,100 @@ let buyQtysCache    = {};  // buy qtys loaded from Sheet when shopping list open
 let showAllItems = false;
 // v27: final shopping list state
 let finalListCache = {};   // {itemId: qty} — items confirmed for final list this session
+
+// ═══════════════════════════════════════════════════════════
+// v49: PER-SWEEP PRELIM STORE
+// ═══════════════════════════════════════════════════════════
+// Before v49 the Pre-Shopping checklist read the single global `state` object.
+// Prelim rows on the Sheet were keyed by sweepId and final lists were scoped by
+// _activeScopeId(), but `state` was one shared bucket — so the checklist showed
+// the UNION of every sweep the device had ever loaded, not the sweep you picked.
+// _fetchStockAndRender() layered each new sweep on top without ever clearing, and
+// only doBeginSweep() reset it — which the buying device never runs, so on that
+// device nothing had been cleared since first use. forceBuy compounded it: it is
+// sticky, so any hand-added or ad hoc item stayed on every later checklist.
+//
+// v49 splits the two jobs `state` was doing:
+//   state         → the live sweep worksheet + home dashboard. Sweeper's data.
+//   prelimStates  → {sweepId: {itemId:{qty,note,forceBuy,meta?}}}. Checker's data.
+//
+// Each sweep gets its own bucket, so switching sweeps is lossless and an ad hoc
+// list contains only its own items.
+const KEY_PRELIM_STATES = 'inv_prelimStates_v49';
+const PRELIM_KEEP       = 8;    // buckets retained before the oldest is pruned
+
+let prelimStates  = {};    // {sweepId: {itemId: {qty, note, forceBuy, meta?}}}
+let activePrelimId = null; // sweepId of the bucket the checklist is rendering
+
+// The sweepId this device derives for its own in-progress sweep. Was duplicated
+// inline in three places (logSweepHistory, addItemToChecklist, syncPrelimToSheet)
+// with subtly different fallbacks — centralised so buckets can't be keyed
+// differently by different call sites.
+function _localSweepId() {
+  const user    = (localStorage.getItem(KEY_USER) || 'Helper').replace(/\s+/g, '');
+  const startTs = localStorage.getItem(KEY_SWEEP_START);
+  const d       = startTs ? new Date(Number(startTs)) : new Date();
+  return d.toISOString().slice(0,16).replace(/[-:T]/g, m => m === '-' ? m : m === ':' ? m : '_') + '_' + user;
+}
+
+function loadPrelimStates() {
+  try { prelimStates = JSON.parse(localStorage.getItem(KEY_PRELIM_STATES) || '{}'); }
+  catch(e) { prelimStates = {}; }
+  activePrelimId = localStorage.getItem(KEY_PRELIM_SWEEP_ID) || null;
+}
+
+function savePrelimStates() {
+  // Bound growth — buckets are small but one per sweep forever would creep.
+  const ids = Object.keys(prelimStates);
+  if (ids.length > PRELIM_KEEP) {
+    ids.filter(id => id !== activePrelimId)
+       .slice(0, ids.length - PRELIM_KEEP)
+       .forEach(id => delete prelimStates[id]);
+  }
+  localStorage.setItem(KEY_PRELIM_STATES, JSON.stringify(prelimStates));
+}
+
+function _setActivePrelim(sweepId) {
+  activePrelimId = sweepId || null;
+  if (sweepId) {
+    if (!prelimStates[sweepId]) prelimStates[sweepId] = {};
+    localStorage.setItem(KEY_PRELIM_SWEEP_ID, sweepId);
+    savePrelimStates();
+  }
+}
+
+// The active bucket. Never returns null — an unresolved sweep renders empty
+// rather than silently falling back to the global state, which is what caused
+// the cross-sweep bleed in the first place.
+function prelim() {
+  return (activePrelimId && prelimStates[activePrelimId]) || {};
+}
+
+function pget(itemId) {
+  return prelim()[itemId] || {};
+}
+
+function pset(itemId, patch) {
+  if (!activePrelimId) return;
+  if (!prelimStates[activePrelimId]) prelimStates[activePrelimId] = {};
+  const b = prelimStates[activePrelimId];
+  b[itemId] = Object.assign({ qty: null, note: '', forceBuy: false }, b[itemId] || {}, patch);
+  savePrelimStates();
+}
+
+// Seed a bucket from the live sweep worksheet — used when a sweep finishes on
+// this device, so the checker starts from exactly what was counted.
+function _seedPrelimFromState(sweepId) {
+  const bucket = {};
+  ALL_ITEMS.forEach(i => {
+    const s = state[i.id] || {};
+    if (s.qty === null || s.qty === undefined) return;   // uncounted items aren't part of this sweep
+    bucket[i.id] = { qty: s.qty, note: s.note || '', forceBuy: !!s.forceBuy };
+  });
+  prelimStates[sweepId] = bucket;
+  _setActivePrelim(sweepId);
+  return bucket;
+}
 let finalListView  = false; // true = showing final list panel within shopping view
 let adhocJustSubmitted = false; // v34: skip sweep picker after ad hoc submit
 
@@ -1046,6 +1140,7 @@ async function boot() {
   document.getElementById('app-version-badge').textContent = APP_VERSION;
   document.getElementById('home-eyebrow').textContent = new Date().toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
   loadLocalState();
+  loadPrelimStates();   // v49
   loadSettings();
   loadAdhocOnBoot();
 
@@ -2379,6 +2474,12 @@ async function tryFinishRoom(){
     });
     logSweepHistory(ROOMS.map(r => r.name), totalChecked, totalNeeded, 'Complete').catch(()=>{});
 
+    // v49: hand the finished sweep to the checker as its OWN prelim bucket,
+    // keyed by the same sweepId logSweepHistory writes. Only items actually
+    // counted in this sweep go in, so the checklist opens clean instead of
+    // inheriting whatever the global state had accumulated.
+    _seedPrelimFromState(_localSweepId());
+
     // v28: Show sweep complete modal
     try {
       const doneInfo = JSON.parse(localStorage.getItem(KEY_SWEEP_DONE) || '{}');
@@ -2511,13 +2612,9 @@ function buildItemCard(item){
 // internal helper so anything still calling it behaves sanely.
 function pushToBuy(itemId, e) {
   if(e) e.stopPropagation();
-  if(!state[itemId]) state[itemId]={qty:null,note:''};
-  // If unchecked, force qty to 0 so it registers as a checked item on the list
-  if(state[itemId].qty===null){
-    state[itemId].qty=0;
-  }
-  state[itemId].forceBuy = !state[itemId].forceBuy;
-  saveState();
+  // v49: retargeted to the active sweep's bucket. Left writing to the global
+  // state, any surviving caller would silently reintroduce the cross-sweep bleed.
+  pset(itemId, { forceBuy: !pget(itemId).forceBuy });
   const item=ITEM_MAP[itemId];
   if(!item) return;
 
@@ -2544,11 +2641,11 @@ function removeFromChecklist(itemId, e) {
   if(e) e.stopPropagation();
   const item = ITEM_MAP[itemId];
   const name = item ? item.name : itemId;
-  if(!state[itemId] || !state[itemId].forceBuy) return;
+  // v49: operates on the active sweep's bucket. Removing an item from one
+  // sweep's checklist must not touch any other sweep, or the sweeper's counts.
+  if(!pget(itemId).forceBuy) return;
 
-  state[itemId].forceBuy = false;
-  state[itemId].qty = null;   // back to "not counted" rather than "counted as zero"
-  saveState();
+  pset(itemId, { forceBuy: false, qty: null });   // back to "not counted", not "counted as zero"
 
   if(finalListCache[itemId] !== undefined){
     delete finalListCache[itemId];
@@ -2697,6 +2794,14 @@ function _loadLocalStateAndRender(){
   if(localStorage.getItem(KEY_SWEEP) === null){
     localStorage.setItem(KEY_SWEEP, 'false');
   }
+  // v49: with no Sheet there is no sweep to pick, so fall back to this device's
+  // own sweep bucket. Seeded from the live worksheet if it doesn't exist yet —
+  // which is also the upgrade path for anyone mid-trip when v49 lands.
+  const localId = _localSweepId();
+  if (!activePrelimId || !prelimStates[activePrelimId]) {
+    if (prelimStates[localId]) _setActivePrelim(localId);
+    else _seedPrelimFromState(localId);
+  }
   renderShoppingList();
 }
 
@@ -2829,29 +2934,50 @@ function _fetchStockAndRender(url){
     if(localStorage.getItem(KEY_SWEEP) === null){
       localStorage.setItem(KEY_SWEEP, 'false');
     }
-    if(Object.keys(stockData).length > 0){
-      // Load snapshot into state in-memory only — never persist to localStorage
-      Object.entries(stockData).forEach(([id, s]) => {
-        state[id] = { qty: s.qty, note: s.note || '', forceBuy: false };
-      });
-    }
-    // v32: Merge prelim state on top — this includes forceBuy flags and any
-    // qty edits the shopping device made after the sweep completed.
-    // Prelim wins over snapshot for forceBuy; snapshot wins for qty if prelim is absent.
-    Object.entries(prelimState).forEach(([id, p]) => {
-      if (!state[id]) state[id] = { qty: null, note: '', forceBuy: false };
-      if (p.forceBuy !== undefined) state[id].forceBuy = p.forceBuy;
-      // Only override qty from prelim if it was explicitly set there (not null)
-      if (p.qty !== null && p.qty !== undefined) state[id].qty = p.qty;
-      if (p.note) state[id].note = p.note;
+
+    // v49: build THIS sweep's bucket from scratch. The old code wrote the
+    // snapshot into the global `state` and layered prelim on top without ever
+    // clearing, so every previously-loaded sweep stayed on the checklist.
+    const bucketId = sweepId || (currentSweepMeta && currentSweepMeta.sweepId) || 'local';
+    const bucket   = {};
+
+    Object.entries(stockData).forEach(([id, s]) => {
+      bucket[id] = { qty: s.qty, note: s.note || '', forceBuy: false };
     });
+
+    // Overlay the saved prelim — the checker's own edits: forceBuy flags, qty
+    // corrections, hand-added items. Sheet wins over local (last write wins).
+    //
+    // v49 CAVEAT — prelim rows written before v49 contain the whole polluted
+    // global state, because syncPrelimToSheet() posted `state` wholesale. Those
+    // rows are marked by the ABSENCE of _v, and are trusted only for items that
+    // are actually in this sweep's snapshot (plus ad hoc custom items, which have
+    // no snapshot by design). Rows written from v49 on are already scoped, so
+    // they're applied in full.
+    const prelimIsScoped = !!prelimState._v;
+    const hasSnapshot    = Object.keys(stockData).length > 0;
+
+    Object.entries(prelimState).forEach(([id, p]) => {
+      if (id === '_v' || !p || typeof p !== 'object') return;
+      const trusted = prelimIsScoped || !hasSnapshot || bucket[id] !== undefined || !!p.meta;
+      if (!trusted) return;
+      if (!bucket[id]) bucket[id] = { qty: null, note: '', forceBuy: false };
+      if (p.forceBuy !== undefined) bucket[id].forceBuy = p.forceBuy;
+      // Only override qty from prelim if it was explicitly set there (not null)
+      if (p.qty !== null && p.qty !== undefined) bucket[id].qty = p.qty;
+      if (p.note) bucket[id].note = p.note;
+      if (p.meta) bucket[id].meta = p.meta;
+    });
+
+    prelimStates[bucketId] = bucket;
+    _setActivePrelim(bucketId);
 
     // v48: rebuild ad hoc custom items from the metadata carried in the prelim.
     // These ids are in no Sheet tab, so without this the buying device holds
     // their state but has no ALL_ITEMS entry to render — the item is simply
     // absent from the checklist with no indication anything is missing.
     const prelimCustom = {};
-    Object.entries(prelimState).forEach(([id, p]) => {
+    Object.entries(bucket).forEach(([id, p]) => {
       if (p && p.meta && p.meta.id) prelimCustom[id] = p.meta;
     });
     if (Object.keys(prelimCustom).length) {
@@ -2859,9 +2985,6 @@ function _fetchStockAndRender(url){
       _saveAdhocCustomMeta(merged);
       _injectAdhocCustomItems(merged);
     }
-
-    // Track which sweepId's prelim is loaded
-    if (sweepId) localStorage.setItem(KEY_PRELIM_SWEEP_ID, sweepId);
 
   }).catch(()=>{
     if(currentSweepMeta && localStorage.getItem(KEY_SWEEP) === null){
@@ -2877,7 +3000,7 @@ function renderShoppingList(){
 
   // Check if a sweep has ever been started
   const sweepEverStarted = localStorage.getItem(KEY_SWEEP) !== null;
-  const anyChecked = ALL_ITEMS.some(i => (state[i.id]||{}).qty !== null);
+  const anyChecked = ALL_ITEMS.some(i => pget(i.id).qty !== null && pget(i.id).qty !== undefined);
   // Also pass if the user selected a sweep from the picker (second device flow)
   const viewingRemoteSweep = !!currentSweepMeta;
 
@@ -2895,9 +3018,11 @@ function renderShoppingList(){
   //   (a) all ★ must-have items that were checked (qty !== null)
   //   (b) all force-buy items (regardless of qty)
   // NOTE: qty < min logic is preserved for future use but not the primary trigger here.
+  // v49: reads the ACTIVE SWEEP'S bucket, not the global state. This one
+  // substitution is what stops sweeps accumulating on the checklist.
   const lists = { Supermarket:[], Online:[], 'Wet Market':[] };
   ALL_ITEMS.forEach(item=>{
-    const s=state[item.id]||{};
+    const s=pget(item.id);
     const isForceBuy = !!s.forceBuy;
     const isCheckedMust = item.must && s.qty !== null;
     // Future hook: qty <= min triggers buy (dormant — uncomment when menu integration lands)
@@ -2911,8 +3036,8 @@ function renderShoppingList(){
 
   const totalNeed = lists.Supermarket.length + lists.Online.length + lists['Wet Market'].length;
   const totalMust = ALL_ITEMS.filter(i=>{
-    const s=state[i.id]||{};
-    return i.must&&s.qty!==null&&s.qty<1;
+    const s=pget(i.id);
+    return i.must&&s.qty!==null&&s.qty!==undefined&&s.qty<1;
   }).length;
 
   document.getElementById('shop-sub-text').textContent=`${totalNeed} item${totalNeed!==1?'s':''} to review`;
@@ -3116,7 +3241,7 @@ function renderShoppingList(){
         scItems.forEach((item,idx)=>{
         globalItemNum++;
         const itemNum = globalItemNum;
-        const note=(state[item.id]||{}).note;
+        const note=pget(item.id).note;
         const row=document.createElement('div');
         const isAlreadyConfirmed = finalListCache[item.id] !== undefined;
         row.className='shop-item'+(item.must?' must-shop':'')+(isAlreadyConfirmed?' psc-confirmed':'');
@@ -3125,7 +3250,7 @@ function renderShoppingList(){
         // v48: null qty is "nobody counted", NOT zero. Collapsing it to 0 told the
         // buyer the shelf was empty when in fact no one had looked — and made a
         // real, deliberate 0 ("we're out") indistinguishable from silence.
-        const rawQty  = (state[item.id]||{}).qty;
+        const rawQty  = pget(item.id).qty;
         const isUncounted = rawQty === null || rawQty === undefined;
         const curQty  = isUncounted ? 0 : rawQty;          // for the maths
         const curDisplay = isUncounted ? '—' : curQty;      // for the eyes
@@ -3145,7 +3270,7 @@ function renderShoppingList(){
         // Credibility label
         // v39: three-way — ★ VERIFIED (mandatory, counted) / 🛒 REQUESTED (pushed
         // to buy by the shopper) / REPORTED (recorded but not mandatory)
-        const isForcedBuy = !!(state[item.id]||{}).forceBuy;
+        const isForcedBuy = !!pget(item.id).forceBuy;   // v49: scoped bucket
         const credLabel = item.must
           ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;background:var(--sky-light);color:var(--sky-dark);border:1.5px solid #F5C870;padding:2px 7px;border-radius:6px;letter-spacing:0.5px;">★ VERIFIED</span>`
           : isForcedBuy
@@ -3256,7 +3381,7 @@ function pscStep(itemId, delta){
 function confirmToFinalList(itemId, itemName, subcat, store){
   const numEl = document.getElementById('psc-num-'+itemId);
   const qty = numEl ? parseInt(numEl.textContent, 10) : 1;
-  const note = (state[itemId]||{}).note || '';
+  const note = pget(itemId).note || '';
 
   // Toggle: if already in list remove it, else add it
   if(finalListCache[itemId] !== undefined){
@@ -3316,9 +3441,9 @@ function switchShopTab(tab){
     // Re-render checklist to reflect any confirmed state changes
     renderShoppingList();
     const totalItems = ALL_ITEMS.filter(i=>{
-      const s=state[i.id]||{};
-      return (i.must && s.qty!==null) || !!s.forceBuy;
-    }).length;
+      const s=pget(i.id);   // v49: same source as renderShoppingList, or the
+      return (i.must && s.qty!==null && s.qty!==undefined) || !!s.forceBuy;
+    }).length;              // header count drifts from the list beneath it
     subEl.textContent = `${totalItems} item${totalItems!==1?'s':''} to review`;
   }
 }
@@ -4585,12 +4710,11 @@ function onAddItemSearch(val) {
 }
 
 async function addItemToChecklist(item) {
-  // Set qty to 0 — appears on Pre-Shopping Checklist as "out of stock, needs buying"
-  if (!state[item.id]) state[item.id] = { qty: null, note: '' };
-  state[item.id].qty = 0;
-  // v39: adding an item here IS a push-to-buy — tag it so it reads 🛒 REQUESTED
-  state[item.id].forceBuy = true;
-  saveState();
+  // v49: hand-adding is a CHECKER action, so it writes to this sweep's prelim
+  // bucket only. qty stays null — nobody counted it — and forceBuy is what puts
+  // it on the checklist, reading 🛒 REQUESTED · NOT COUNTED.
+  if (!activePrelimId) _setActivePrelim(_localSweepId());
+  pset(item.id, { qty: null, forceBuy: true });
 
   closeAddItemModal();
   showToast(`🛒 ${item.name} added and requested`);
@@ -4598,31 +4722,10 @@ async function addItemToChecklist(item) {
   // Re-render the checklist so item appears immediately
   if (!finalListView) renderShoppingList();
 
-  // Sync to Sheet so other devices see the addition
-  const url = localStorage.getItem(KEY_URL);
-  if (url) {
-    try {
-      await androidSafePost(url, {
-        action: 'sync',
-        stock:  state,
-        date:   new Date().toLocaleDateString('en-AU'),
-        time:   new Date().toLocaleTimeString('en-AU', {hour:'2-digit',minute:'2-digit'}),
-        user:   localStorage.getItem(KEY_USER) || 'Helper',
-        sweepId: (() => {
-          const startTs = localStorage.getItem(KEY_SWEEP_START);
-          const user = localStorage.getItem(KEY_USER) || 'Helper';
-          return startTs
-            ? new Date(Number(startTs)).toISOString().slice(0,16).replace(/[-:T]/g,m=>m==='-'?m:m===':'?m:'_') + '_' + user.replace(/\s+/g,'')
-            : new Date().toISOString().slice(0,16).replace('T','_') + '_' + user.replace(/\s+/g,'');
-        })(),
-        scope: getSweepScope().join(', ') || 'All',
-      }).then(r => _assertSheetOk(r, 'syncing stock'));   // v42
-      setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
-    } catch(e) {
-      setSyncBadge('pending', '⟳ Sync pending');
-    }
-  }
-  // v32: also push the updated prelim state so other devices see this addition
+  // v49: the old code also posted action:'sync' with the whole global `state`,
+  // which let the buying device overwrite the sweep's stock snapshot with its own
+  // accumulated bucket — a second route for the same cross-sweep pollution. The
+  // prelim sync below already propagates the addition, scoped to this sweep.
   syncPrelimToSheet();
 }
 
@@ -4642,15 +4745,10 @@ async function syncPrelimToSheet() {
   if (!url) return;
 
   // Determine which sweepId this prelim belongs to
-  const sweepId = localStorage.getItem(KEY_PRELIM_SWEEP_ID)
+  const sweepId = activePrelimId
+    || localStorage.getItem(KEY_PRELIM_SWEEP_ID)
     || (currentSweepMeta && currentSweepMeta.sweepId)
-    || (() => {
-      const startTs = localStorage.getItem(KEY_SWEEP_START);
-      const user    = localStorage.getItem(KEY_USER) || 'Helper';
-      return startTs
-        ? new Date(Number(startTs)).toISOString().slice(0,16).replace(/[-:T]/g,m=>m==='-'?m:m===':'?m:'_') + '_' + user.replace(/\s+/g,'')
-        : null;
-    })();
+    || (localStorage.getItem(KEY_SWEEP_START) ? _localSweepId() : null);
 
   if (!sweepId) return; // can't save without a sweep anchor
 
@@ -4659,7 +4757,11 @@ async function syncPrelimToSheet() {
       action:  'saveprelimlist',
       sweepId,
       savedBy: localStorage.getItem(KEY_USER) || 'Helper',
-      state,   // full in-memory state — other devices will merge this on top of snapshot
+      // v49: this sweep's bucket ONLY. Previously the whole global `state` was
+      // posted, so one device's accumulated union was written to every sweep's
+      // prelim row on the Sheet — spreading the bleed to every other device.
+      // _v marks the row as scoped so loaders can trust it in full.
+      state: Object.assign({ _v: 49 }, prelim()),
     });
     _assertSheetOk(r, 'syncing the pre-shopping checklist');   // v42
     setSyncBadge('synced', `✓ Synced  ${fmtTime()}`);
@@ -5314,7 +5416,7 @@ async function submitAdhocToPrelim() {
       action:  'saveprelimlist',
       sweepId,
       savedBy: user,
-      state:   prelimState,
+      state:   Object.assign({ _v: 49 }, prelimState),   // v49: marks the row as sweep-scoped
     }), 'saving the ad hoc list');
 
     // 2. Log to Sweep History so lastsweep returns it and other devices see the banner
@@ -5356,17 +5458,22 @@ async function submitAdhocToPrelim() {
   // 5. Load the ad hoc state into the in-memory state so the Pre-Shopping tab
   //    renders immediately without needing to fetch from Sheet first.
   //    We set KEY_SWEEP to 'false' (not active) but populate state so items show.
-  // v48: mirrors prelimState exactly — same forceBuy, same nullable qty. Any
-  // divergence here shows up as the checklist looking different before and after
-  // a reload, which is how the old forceBuy:false bug stayed hidden for so long.
+  // v49: the ad hoc list gets its OWN bucket containing ONLY its own items.
+  // Previously these were written into the global `state`, so an ad hoc list
+  // opened showing the last sweep's counted must-haves alongside the two things
+  // someone actually asked for. A fresh bucket starts empty by construction.
   localStorage.setItem(KEY_SWEEP, 'false');
+  const adhocBucket = {};
   items.forEach(i => {
-    state[i.id] = {
+    adhocBucket[i.id] = {
       qty:      (i.qty === undefined) ? null : i.qty,
       note:     i.custom ? '✏️ Custom item' : '',
       forceBuy: true,
     };
+    if (i.custom) adhocBucket[i.id].meta = prelimState[i.id].meta;
   });
+  prelimStates[sweepId] = adhocBucket;
+  _setActivePrelim(sweepId);
 
   // v48: persist custom item metadata, then inject. Previously this was written
   // to a window global and lost on reload, so custom items rendered exactly once.
