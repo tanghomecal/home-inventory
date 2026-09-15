@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Home Inventory v49</title>
+<title>Home Inventory v50</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -330,6 +330,17 @@
   .shop-check.checked::after{content:'✓';color:white;font-size:15px;font-weight:800;}
   .shop-item-name{font-size:15px;font-weight:700;color:var(--charcoal);}
   .shop-item.checked-item .shop-item-name{text-decoration:line-through;color:var(--mid);}
+  /* v50: note history inside the note modal */
+  .note-hist{margin-top:14px;border-top:2px dashed var(--violet-mid);padding-top:12px;}
+  .note-hist-title{font-size:12px;font-weight:800;color:var(--mid);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:8px;}
+  .note-hist-row{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1.5px solid var(--violet-mid);border-radius:var(--radius-sm);background:var(--violet-bg);margin-bottom:8px;cursor:pointer;transition:all 0.15s;}
+  .note-hist-row:active{background:var(--violet-light);border-color:var(--violet);}
+  .note-hist-body{flex:1;min-width:0;}
+  .note-hist-text{font-size:13px;color:var(--charcoal);font-weight:600;word-break:break-word;}
+  .note-hist-meta{font-size:11px;color:var(--mid);font-weight:600;margin-top:3px;}
+  .note-hist-use{font-size:11px;font-weight:800;color:var(--violet-dark);border:1.5px solid var(--violet-mid);border-radius:6px;padding:4px 8px;white-space:nowrap;background:var(--white);}
+  .note-hist-empty{font-size:12px;color:var(--mid);font-weight:500;font-style:italic;}
+  .note-tap-past{font-size:11px;color:var(--mid);font-weight:700;}
   .shop-note-text{font-size:12px;color:var(--purple-dark);font-style:italic;display:block;margin-top:3px;font-weight:500;}
   .empty-shop{text-align:center;padding:60px 24px;}
   /* ── SHOPPING LIST QTY TABLE ── */
@@ -979,6 +990,10 @@
     <div class="modal-handle"></div>
     <div class="modal-title" id="note-modal-title">Add Note</div>
     <textarea class="modal-textarea" id="note-textarea" placeholder="e.g. Buy organic, large size, specific brand…"></textarea>
+    <div class="note-hist" id="note-hist" style="display:none;">
+      <div class="note-hist-title">Previous notes</div>
+      <div id="note-hist-list"></div>
+    </div>
     <div class="modal-btns">
       <button class="modal-clear" onclick="clearNote()">Clear</button>
       <button class="modal-cancel" onclick="closeNoteModal()">Cancel</button>
@@ -1019,6 +1034,8 @@ const KEY_ROUTES           = 'inv_routes';            // v36: {store: {routeId,n
 // v39 keys — final lists are now scoped to a sweep and split by store
 const KEY_ACTIVE_SWEEP_ID  = 'inv_activeFinalSweepId'; // sweepId whose final list is loaded in-memory
 const KEY_FINAL_STORE      = 'inv_finalStore';         // last-viewed store segment on the Final List tab
+// v50 keys
+const KEY_NOTE_HISTORY     = 'inv_noteHistory_v50';    // {itemId: [{note,by,date,ts,sweepId}]} newest first
 
 // Item data — loaded from Google Sheets (no hardcoded items)
 let ROOMS     = [];
@@ -1036,6 +1053,82 @@ let buyQtysCache    = {};  // buy qtys loaded from Sheet when shopping list open
 let showAllItems = false;
 // v27: final shopping list state
 let finalListCache = {};   // {itemId: qty} — items confirmed for final list this session
+
+// ═══════════════════════════════════════════════════════════
+// v50: NOTE HISTORY
+// ═══════════════════════════════════════════════════════════
+// A note is a statement about one sweep — "only the dented tin left", "buy the
+// 2kg bag this time". doBeginSweep() reset every qty to null but deliberately
+// carried `note` forward, so a fresh check opened with last fortnight's comments
+// already attached to the cards. Worse, `state` is posted wholesale by
+// syncToSheet(), so those stale notes were rewritten into 📦 Current Stock and
+// served to the checker as if they described the new sweep.
+//
+// v50 makes the sweep boundary clear notes, and archives them first. The note
+// isn't lost — it moves to a per-item history you can read and re-apply from the
+// note modal, the same shape as "Use Last" for quantities.
+//
+// Cross-device note: this archive is local, like ticks (see §8 of the context
+// doc). The durable cross-device record is 📜 Stock Snapshots, which already
+// stores a Note column per sweepId — no Apps Script change needed for that.
+const NOTE_HISTORY_KEEP = 6;   // entries retained per item
+
+function _getNoteHistory() {
+  try { return JSON.parse(localStorage.getItem(KEY_NOTE_HISTORY) || '{}'); }
+  catch(e) { return {}; }
+}
+
+function _saveNoteHistory(h) {
+  try { localStorage.setItem(KEY_NOTE_HISTORY, JSON.stringify(h)); }
+  catch(e) { console.warn('note history save failed:', e); }
+}
+
+function getNoteHistory(itemId) {
+  const h = _getNoteHistory()[itemId];
+  return Array.isArray(h) ? h : [];
+}
+
+// Move every note currently on the worksheet into history. Called at the sweep
+// boundary, before qtys are reset — the last moment the note and the sweep it
+// belongs to are still associated.
+//
+// Dedupe is on text, not time: re-entering the same note next sweep shouldn't
+// stack six identical rows in the picker. An unchanged note simply keeps its
+// original entry.
+function archiveNotes(reason) {
+  const h       = _getNoteHistory();
+  const by      = localStorage.getItem(KEY_USER) || 'Helper';
+  const startTs = localStorage.getItem(KEY_SWEEP_START);
+  const when    = startTs ? new Date(Number(startTs)) : new Date();
+  const sweepId = localStorage.getItem(KEY_SWEEP) === 'true' ? _localSweepId() : null;
+  let archived  = 0;
+
+  Object.keys(state).forEach(id => {
+    const s    = state[id] || {};
+    const note = (s.note || '').trim();
+    if (!note) return;
+    const list = Array.isArray(h[id]) ? h[id] : [];
+    if (list.some(e => e && e.note === note)) return;   // already on record
+    // qty travels with the note. "Buy the 2kg bag" on its own is trivia; paired
+    // with "2 left on 01/09" it's a reading of that shelf on that day, which is
+    // what makes it worth keeping. null is meaningful too — it means the item
+    // was never counted, so the note is the only thing that sweep recorded.
+    list.unshift({
+      note,
+      qty:  (s.qty === undefined) ? null : s.qty,
+      by,
+      date: when.toLocaleDateString('en-AU'),
+      ts:   when.getTime(),
+      sweepId,
+      reason: reason || 'sweep',
+    });
+    h[id] = list.slice(0, NOTE_HISTORY_KEEP);
+    archived++;
+  });
+
+  if (archived) _saveNoteHistory(h);
+  return archived;
+}
 
 // ═══════════════════════════════════════════════════════════
 // v49: PER-SWEEP PRELIM STORE
@@ -1115,6 +1208,33 @@ function pset(itemId, patch) {
   const b = prelimStates[activePrelimId];
   b[itemId] = Object.assign({ qty: null, note: '', forceBuy: false }, b[itemId] || {}, patch);
   savePrelimStates();
+}
+
+// v50: the note to print on a final list. The three call sites below read the
+// global `state` — the sweeper's worksheet. On a buying device that worksheet
+// belongs to whatever sweep that device last walked, if any, so a Supermarket
+// list could be stamped with notes from an unrelated sweep. Worse after v50,
+// where the worksheet is cleared at each sweep boundary: the checklist would
+// show the right note and the saved list would carry none.
+//
+// The active prelim bucket is the checker's own scoped copy, so it wins;
+// `state` stays as a fallback for the sweeper's own device mid-sweep.
+function noteFor(itemId) {
+  const p = pget(itemId).note;
+  if (p) return p;
+  return ((state[itemId] || {}).note) || '';
+}
+
+// v50: note resolution for a FINAL LIST, which ranks differently from the
+// checklist. A saved list is the artifact for one trip, so its own stored note
+// outranks the global worksheet — on a device that sweeps as well as shops,
+// `state` may hold a note for the same item from a different, in-progress sweep,
+// and that must not overwrite what the list was saved with. The scoped prelim
+// bucket still wins where it exists, because that's this sweep's live value.
+// `state` survives only as a last resort, for the builder's own device mid-sweep
+// before anything has been saved.
+function finalNoteFor(itemId, saved) {
+  return pget(itemId).note || ((saved || {}).note) || ((state[itemId] || {}).note) || '';
 }
 
 // Seed a bucket from the live sweep worksheet — used when a sweep finishes on
@@ -1827,8 +1947,15 @@ function doBeginSweep(scope) {
   const hasRealData = ALL_ITEMS.some(i => (state[i.id]||{}).qty !== null);
   if (hasRealData) localStorage.setItem(KEY_LAST, JSON.stringify(state));
 
-  // Reset all quantities to null
-  ALL_ITEMS.forEach(i => { state[i.id] = { qty: null, note: state[i.id]?.note || '' }; });
+  // v50: a note describes the sweep it was written in, so it retires with that
+  // sweep. Archive first — the text stays reachable from the note modal — then
+  // start the new check with clean cards. Previously the note was carried
+  // forward here, which also meant syncToSheet() rewrote it into 📦 Current
+  // Stock and the checker saw last sweep's comments on this sweep's checklist.
+  const archived = archiveNotes('sweep-start');
+
+  // Reset all quantities to null AND clear notes
+  ALL_ITEMS.forEach(i => { state[i.id] = { qty: null, note: '' }; });
   saveState();
 
   localStorage.setItem(KEY_SWEEP, 'true');
@@ -1861,7 +1988,10 @@ function doBeginSweep(scope) {
   const skippedMsg = autoSkipped.length > 0
     ? ` · ${autoSkipped.length} room${autoSkipped.length>1?'s':''} auto-skipped`
     : '';
-  showToast('✓ New check started · ' + scope.join(', ') + skippedMsg);
+  const notesMsg = archived > 0
+    ? ` · ${archived} note${archived>1?'s':''} archived`
+    : '';
+  showToast('✓ New check started · ' + scope.join(', ') + skippedMsg + notesMsg);
 }
 
 async function doStartFresh(newScope) {
@@ -1953,9 +2083,14 @@ function showConnStatus(type, msg) {
 
 function confirmReset() {
   if (confirm('Clear all stock counts? This cannot be undone. The Google Sheet is not affected.')) {
+    // v50: this already wiped notes — now they're archived on the way out, so a
+    // mis-tapped reset doesn't destroy a fortnight of comments.
+    const archived = archiveNotes('manual-reset');
     ALL_ITEMS.forEach(i => { state[i.id] = {qty:null, note:''}; });
     saveState();
-    showToast('All counts cleared');
+    showToast(archived > 0
+      ? `All counts cleared · ${archived} note${archived>1?'s':''} archived`
+      : 'All counts cleared');
     renderHome();
   }
 }
@@ -2600,7 +2735,7 @@ function buildItemCard(item){
     <div class="item-note-row">
       <div class="note-tap ${note?'has-note':''}" id="notetap-${item.id}"
            onclick="openNoteModal('${item.id}','${item.name.replace(/'/g,"\\'")}')">
-        ${note?'📝 '+note:'+ Add note'}
+        ${_noteTapLabel(item.id, note)}
       </div>
     </div>`;
   return card;
@@ -2701,10 +2836,62 @@ function adjustQty(itemId,delta,e){
 // ═══════════════════════════════════════════════════════════
 // NOTE MODAL
 // ═══════════════════════════════════════════════════════════
+function _escHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// v50: label for the note tap on an item card. A past note is worth advertising
+// even when the current one is empty — otherwise the history is invisible until
+// you happen to open the modal.
+function _noteTapLabel(itemId, note){
+  if (note) return '📝 ' + _escHtml(note);
+  const n = getNoteHistory(itemId).length;
+  return n ? `+ Add note <span class="note-tap-past">· ${n} past</span>` : '+ Add note';
+}
+
+// v50: the stock reading this note was written against. An entry with no count
+// is not a defect — it says the sweeper commented without counting, which is
+// itself worth seeing.
+function _histQtyLabel(e){
+  if (e.qty === null || e.qty === undefined) return 'not counted';
+  if (e.qty === 0) return 'none left';
+  return `${e.qty} left`;
+}
+
+// v50: the archived notes for this item, newest first, each tappable to drop
+// back into the textarea. Reading them is the point — re-applying is a
+// convenience, not the default, so nothing is pre-filled.
+function renderNoteHistory(itemId){
+  const wrap = document.getElementById('note-hist');
+  const list = document.getElementById('note-hist-list');
+  const hist = getNoteHistory(itemId);
+  if (!hist.length) { wrap.style.display = 'none'; list.innerHTML = ''; return; }
+  wrap.style.display = '';
+  list.innerHTML = hist.map((e, i) => `
+    <div class="note-hist-row" onclick="useHistoricNote(${i})">
+      <div class="note-hist-body">
+        <div class="note-hist-text">${_escHtml(e.note)}</div>
+        <div class="note-hist-meta">${_escHtml(e.date || '—')} · ${_escHtml(_histQtyLabel(e))}${e.by ? ' · ' + _escHtml(e.by) : ''}</div>
+      </div>
+      <div class="note-hist-use">Reuse</div>
+    </div>`).join('');
+}
+
+function useHistoricNote(idx){
+  if (!noteTargetId) return;
+  const entry = getNoteHistory(noteTargetId)[idx];
+  if (!entry) return;
+  const ta = document.getElementById('note-textarea');
+  ta.value = entry.note;
+  ta.focus();
+  showToast('Note copied in — tap Save to apply');
+}
+
 function openNoteModal(itemId,itemName){
   noteTargetId=itemId;
   document.getElementById('note-modal-title').textContent=itemName;
   document.getElementById('note-textarea').value=(state[itemId]||{}).note||'';
+  renderNoteHistory(itemId);
   document.getElementById('note-modal').classList.add('active');
   setTimeout(()=>document.getElementById('note-textarea').focus(),300);
 }
@@ -2714,10 +2901,35 @@ function saveNote(){
   if(!noteTargetId) return;
   if(!state[noteTargetId]) state[noteTargetId]={qty:null,note:''};
   const note=document.getElementById('note-textarea').value.trim();
+  const prev=(state[noteTargetId].note||'').trim();
+
+  // v50: replacing a note mid-sweep retires the old text to history straight
+  // away. Without this, an edit is the one way a note can still vanish without
+  // ever reaching the archive — the sweep-boundary sweep only sees what survived.
+  if (prev && prev !== note) {
+    const h = _getNoteHistory();
+    const list = Array.isArray(h[noteTargetId]) ? h[noteTargetId] : [];
+    if (!list.some(e => e && e.note === prev)) {
+      const startTs = localStorage.getItem(KEY_SWEEP_START);
+      const when    = startTs ? new Date(Number(startTs)) : new Date();
+      list.unshift({
+        note: prev,
+        qty:  (state[noteTargetId].qty === undefined) ? null : state[noteTargetId].qty,
+        by:   localStorage.getItem(KEY_USER) || 'Helper',
+        date: when.toLocaleDateString('en-AU'),
+        ts:   when.getTime(),
+        sweepId: localStorage.getItem(KEY_SWEEP) === 'true' ? _localSweepId() : null,
+        reason: 'edited',
+      });
+      h[noteTargetId] = list.slice(0, NOTE_HISTORY_KEEP);
+      _saveNoteHistory(h);
+    }
+  }
+
   state[noteTargetId].note=note;
   saveState();
   const tap=document.getElementById('notetap-'+noteTargetId);
-  if(tap){tap.className='note-tap'+(note?' has-note':'');tap.textContent=note?'📝 '+note:'+ Add note';}
+  if(tap){tap.className='note-tap'+(note?' has-note':'');tap.innerHTML=_noteTapLabel(noteTargetId,note);}
   closeNoteModal(); showToast('Note saved');
 }
 document.getElementById('note-modal').addEventListener('click',e=>{if(e.target===document.getElementById('note-modal'))closeNoteModal();});
@@ -3381,7 +3593,7 @@ function pscStep(itemId, delta){
 function confirmToFinalList(itemId, itemName, subcat, store){
   const numEl = document.getElementById('psc-num-'+itemId);
   const qty = numEl ? parseInt(numEl.textContent, 10) : 1;
-  const note = pget(itemId).note || '';
+  const note = noteFor(itemId);
 
   // Toggle: if already in list remove it, else add it
   if(finalListCache[itemId] !== undefined){
@@ -3815,7 +4027,7 @@ function renderFinalList(){
       if(finalListCache[item.id] !== undefined){
         window._finalItemMeta[item.id] = {
           id: item.id, name: item.name, subcat: item.subcat||'',
-          store: item.store||'Supermarket', note: (state[item.id]||{}).note||''
+          store: item.store||'Supermarket', note: noteFor(item.id)
         };
       }
     });
@@ -3865,9 +4077,19 @@ function renderFinalList(){
   }
 
   // Build list of confirmed items with full metadata
+  // v50: resolve the note separately from the item record. `ITEM_MAP[id] ||
+  // meta[id]` means a master item always wins, and master entries carry `notes`
+  // (the Items-sheet field), not `note` — so `item.note` was always undefined
+  // for them and the spread contributed nothing. On the device that built the
+  // list the live prelim bucket covered for that; on the shopper's device there
+  // is no bucket for that sweep, so the note the list was SAVED with — posted by
+  // saveFinalList and stored by Apps Script — was read straight past and the
+  // shopper saw nothing. meta[] is the saved list's own copy, so it's the
+  // fallback, and it's read off `saved` rather than the merged record.
   let allConfirmed = confirmedIds.map(id => {
-    const item = ITEM_MAP[id] || meta[id] || { id, name: id, subcat:'', store:'Supermarket', note:'' };
-    return { ...item, qty: finalListCache[id], note: (state[id]||{}).note || item.note || '' };
+    const saved = meta[id] || {};
+    const item  = ITEM_MAP[id] || saved || { id, name: id, subcat:'', store:'Supermarket' };
+    return { ...item, qty: finalListCache[id], note: finalNoteFor(id, saved) };
   });
 
   // ── MODE BAR (shop / reorder) ──
@@ -4279,14 +4501,18 @@ async function saveFinalListToSheet(){
     : stamp;
 
   const allItems = confirmed.map(id => {
-    const item = ITEM_MAP[id] || meta[id] || {};
+    const saved = meta[id] || {};
+    const item  = ITEM_MAP[id] || saved || {};
     return {
       itemId:  id,
       name:    item.name  || id,
       subcat:  item.subcat|| '',
       store:   item.store || 'Supermarket',
       qty:     finalListCache[id],
-      note:    (state[id]||{}).note || '',
+      // v50: same fallback as renderFinalList, for the same reason — re-saving a
+      // list loaded on a device with no prelim bucket for that sweep would
+      // otherwise write the note back as empty and erase it at the source.
+      note:    finalNoteFor(id, saved),
     };
   });
 
